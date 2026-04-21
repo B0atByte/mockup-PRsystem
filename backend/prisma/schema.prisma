@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  name      String
+  email     String   @unique
+  role      Role
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests  PurchaseRequest[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+enum Role {
+  owner
+  employee
+  purchasing
+  accounting
+  itsupport
+}
+
+model PurchaseRequest {
+  id            String        @id @default(cuid())
+  reqNo         String        @unique
+  title         String
+  reason        String?       @db.Text
+  category      String
+  categories    String        @db.Text
+  totalAmount   Float
+  supplierName  String
+  supplierName2 String?
+  paymentMethod PaymentMethod
+  paymentTiming PaymentTiming
+  orderDate     String
+  deliveryDate  String
+  dueDate       String
+  contactName   String
+  signedDate    String
+  status        RequestStatus @default(pending)
+  notes         String?       @db.Text
+  prNo          String?
+  poNo          String?
+  prFile        String?
+  poFile        String?
+  transferRef   String?
+  transferDate  String?
+  createdBy     String
+  createdByName String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items   PurchaseItem[]
+  creator User           @relation(fields: [createdBy], references: [id])
+
+  @@map("purchase_requests")
+}
+
+enum PaymentMethod {
+  bank
+  cash
+  transfer
+}
+
+enum PaymentTiming {
+  before
+  after
+}
+
+enum RequestStatus {
+  pending
+  purchasing
+  accounting
+  transferred
+  rejected
+}
+
+model PurchaseItem {
+  id        String  @id @default(cuid())
+  code      String
+  name      String
+  qty       Float
+  unit      String
+  price     Float
+  itemNote  String? @default("")
+
+  requestId String
+  request   PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_items")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  userName  String
+  action    String
+  module    String
+  detail    String   @db.Text
+  ip        String?
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
