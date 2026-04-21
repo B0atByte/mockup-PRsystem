@@ -8,10 +8,10 @@ import {
   FileCheck, Send, Banknote, History, RefreshCw, Menu, Package
 } from 'lucide-react';
 import {
-  USERS, INITIAL_REQUESTS, INITIAL_AUDIT,
   ROLE_LABELS, ROLE_COLORS, STATUS_LABELS, STATUS_COLORS, CATEGORIES,
   type User, type PurchaseRequest, type AuditLog, type Role
 } from './data';
+import { api } from './lib/api';
 import './index.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -287,13 +287,17 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
     { username: 'itsupport', role: 'IT Support', color: 'bg-slate-100 text-slate-700' },
   ];
 
-  const doLogin = (u: string, p: string) => {
+  const doLogin = async (u: string, p: string) => {
+    if (!u || !p) { setError('กรุณากรอก username และ password'); return; }
     setLoading(true); setError('');
-    setTimeout(() => {
-      const found = USERS.find(x => x.username === u && x.password === p && x.active);
-      if (found) onLogin(found);
-      else { setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'); setLoading(false); }
-    }, 400);
+    try {
+      const res = await api.auth.login(u, p);
+      localStorage.setItem('token', res.token);
+      onLogin(res.user);
+    } catch (err: any) {
+      setError(err.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      setLoading(false);
+    }
   };
 
   return (
@@ -1644,9 +1648,9 @@ export default function App() {
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [requests, setRequests] = useState<PurchaseRequest[]>(INITIAL_REQUESTS);
-  const [users, setUsers] = useState<User[]>(USERS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT);
+  const [requests, setRequests] = useState<PurchaseRequest[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   // Modal states
   const [viewReq, setViewReq] = useState<PurchaseRequest | null>(null);
@@ -1671,14 +1675,39 @@ export default function App() {
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
 
+  // Auto-login: ถ้ามี token ใน localStorage ให้ดึง user และเข้าระบบอัตโนมัติ
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    api.auth.me()
+      .then(user => {
+        setCurrentUser(user);
+        const defaults: Partial<Record<Role, Page>> = { owner: 'dashboard', employee: 'my-requests', purchasing: 'pending-approval', accounting: 'payment-list', itsupport: 'dashboard' };
+        setPage(defaults[user.role as Role] || 'dashboard');
+      })
+      .catch(() => localStorage.removeItem('token'));
+  }, []);
+
+  // Fetch data เมื่อ login สำเร็จ
+  useEffect(() => {
+    if (!currentUser) { setRequests([]); setUsers([]); setAuditLogs([]); return; }
+    api.requests.list().then(setRequests).catch(console.error);
+    if (currentUser.role === 'itsupport') {
+      api.users.list().then(setUsers).catch(console.error);
+      api.audit.list().then(setAuditLogs).catch(console.error);
+    } else if (currentUser.role === 'owner') {
+      api.audit.list().then(setAuditLogs).catch(console.error);
+    }
+  }, [currentUser?.id]);
+
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
     const id = Date.now().toString();
     setToasts(t => [...t, { id, message, type }]);
     setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000);
   }, []);
 
-  const addAudit = useCallback((userId: string, userName: string, action: string, module: string, detail: string) => {
-    setAuditLogs(prev => [{ id: `a${Date.now()}`, userId, userName, action, module, detail, timestamp: new Date().toLocaleString('th-TH'), ip: '192.168.1.x' }, ...prev]);
+  const addAudit = useCallback((action: string, module: string, detail: string) => {
+    api.audit.log({ action, module, detail }).catch(console.error);
   }, []);
 
   const navigate = useCallback((p: Page) => {
@@ -1688,20 +1717,22 @@ export default function App() {
 
   const handleLogin = (u: User) => {
     setCurrentUser(u);
-    addAudit(u.id, u.name, 'LOGIN', 'Auth', 'เข้าสู่ระบบสำเร็จ');
+    addAudit('LOGIN', 'Auth', 'เข้าสู่ระบบสำเร็จ');
     const defaults: Partial<Record<Role, Page>> = { owner: 'dashboard', employee: 'my-requests', purchasing: 'pending-approval', accounting: 'payment-list', itsupport: 'dashboard' };
     setPage(defaults[u.role] || 'dashboard');
   };
 
   const handleLogout = () => {
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'LOGOUT', 'Auth', 'ออกจากระบบ');
-    setCurrentUser(null); setPage('dashboard');
+    addAudit('LOGOUT', 'Auth', 'ออกจากระบบ');
+    localStorage.removeItem('token');
+    setCurrentUser(null);
+    setPage('dashboard');
   };
 
   const handleCreateRequest = (data: Omit<PurchaseRequest, 'id' | 'reqNo' | 'createdAt' | 'updatedAt'>) => {
     const newReq: PurchaseRequest = { ...data, id: `r${Date.now()}`, reqNo: `PR-2025-${String(requests.length + 1).padStart(3, '0')}`, createdAt: today(), updatedAt: today() };
     setRequests(r => [...r, newReq]);
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'CREATE', 'Purchase Request', `สร้างใบขอซื้อ ${newReq.reqNo}`);
+    addAudit('CREATE', 'Purchase Request', `สร้างใบขอซื้อ ${newReq.reqNo}`);
     toast(`สร้างใบขอซื้อ ${newReq.reqNo} สำเร็จ`);
     setPage('my-requests');
   };
@@ -1711,35 +1742,35 @@ export default function App() {
     const prNo = `PR-${String(n).padStart(3, '0')}`;
     const poNo = `PO-${String(n).padStart(3, '0')}`;
     setRequests(r => r.map(x => x.id === id ? { ...x, status: 'purchasing', prNo, poNo, prFile: prf, poFile: pof, notes, updatedAt: today() } : x));
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
+    addAudit('UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
     toast('แนบเอกสาร PR/PO สำเร็จ พร้อมส่งต่อฝ่ายบัญชี');
     setIssuePRReq(null); setPrFile(''); setPoFile(''); setPrNotes('');
   };
 
   const handleReject = (id: string) => {
     setRequests(r => r.map(x => x.id === id ? { ...x, status: 'rejected', notes: 'ปฏิเสธโดยฝ่ายจัดซื้อ', updatedAt: today() } : x));
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'REJECT', 'Purchase Request', `ปฏิเสธคำขอ`);
+    addAudit('REJECT', 'Purchase Request', `ปฏิเสธคำขอ`);
     toast('ปฏิเสธคำขอแล้ว', 'info');
     setRejectReq(null);
   };
 
   const handleForward = (r: PurchaseRequest) => {
     setRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'accounting', updatedAt: today() } : x));
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'UPDATE', 'Purchase Request', `ส่งต่อบัญชี ${r.reqNo}`);
+    addAudit('UPDATE', 'Purchase Request', `ส่งต่อบัญชี ${r.reqNo}`);
     toast('ส่งต่อฝ่ายบัญชีสำเร็จ');
     setForwardReq(null);
   };
 
   const handleTransfer = (id: string, ref: string, date: string, notes: string) => {
     setRequests(r => r.map(x => x.id === id ? { ...x, status: 'transferred', transferRef: ref, transferDate: date, notes, updatedAt: today() } : x));
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'UPDATE', 'Payment', `บันทึกการโอนเงิน ${ref}`);
+    addAudit('UPDATE', 'Payment', `บันทึกการโอนเงิน ${ref}`);
     toast(`บันทึกการโอนเงิน ${ref} สำเร็จ`);
     setRecordPayReq(null); setTransferRef(''); setTransferNotes('');
   };
 
   const handleDeleteUser = (u: User) => {
     setUsers(list => list.filter(x => x.id !== u.id));
-    if (currentUser) addAudit(currentUser.id, currentUser.name, 'DELETE', 'User Management', `ลบผู้ใช้ ${u.username}`);
+    addAudit('DELETE', 'User Management', `ลบผู้ใช้ ${u.username}`);
     toast(`ลบผู้ใช้ ${u.name} แล้ว`, 'info');
     setDeleteUserTarget(null);
   };
@@ -1747,12 +1778,12 @@ export default function App() {
   const handleSaveUser = (data: Partial<User>) => {
     if (editUserTarget) {
       setUsers(list => list.map(u => u.id === editUserTarget.id ? { ...u, ...data } : u));
-      if (currentUser) addAudit(currentUser.id, currentUser.name, 'UPDATE', 'User Management', `แก้ไขผู้ใช้ ${editUserTarget.username}`);
+      addAudit('UPDATE', 'User Management', `แก้ไขผู้ใช้ ${editUserTarget.username}`);
       toast('บันทึกการแก้ไขสำเร็จ');
     } else {
       const newU: User = { id: `u${Date.now()}`, username: data.username!, password: data.password || '1234', name: data.name!, email: data.email!, role: data.role!, active: data.active ?? true, createdAt: today() };
       setUsers(list => [...list, newU]);
-      if (currentUser) addAudit(currentUser.id, currentUser.name, 'CREATE', 'User Management', `เพิ่มผู้ใช้ ${newU.username}`);
+      addAudit('CREATE', 'User Management', `เพิ่มผู้ใช้ ${newU.username}`);
       toast(`เพิ่มผู้ใช้ ${newU.name} สำเร็จ`);
     }
     setEditUserTarget(undefined);
@@ -1871,7 +1902,7 @@ export default function App() {
         onConfirm={() => {
           if (!resetPwUser) return;
           setUsers(list => list.map(u => u.id === resetPwUser.id ? { ...u, password: '1234' } : u));
-          if (currentUser) addAudit(currentUser.id, currentUser.name, 'UPDATE', 'User Management', `Reset password ของ ${resetPwUser.username}`);
+          addAudit('UPDATE', 'User Management', `Reset password ของ ${resetPwUser.username}`);
           toast(`Reset Password ของ ${resetPwUser.name} แล้ว (รหัสใหม่: 1234)`, 'warning');
           setResetPwUser(null);
         }}
