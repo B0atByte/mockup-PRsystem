@@ -1815,6 +1815,13 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [collapsed, setCollapsed] = useState(false);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ siteName: 'Casa Lapin', siteSubtitle: 'ระบบขอซื้อสินค้า', logoUrl: null });
+
+  // อัปเดต favicon + title ทุกครั้งที่ settings เปลี่ยน
+  useEffect(() => {
+    document.title = `${siteSettings.siteName} — ${siteSettings.siteSubtitle}`;
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (favicon) favicon.href = siteSettings.logoUrl || '/favicon.png';
+  }, [siteSettings.siteName, siteSettings.siteSubtitle, siteSettings.logoUrl]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme');
