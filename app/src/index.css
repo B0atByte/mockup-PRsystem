@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif;
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.dark body {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  text-align: left;
+  border: none;
+  margin: 0;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(110%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page-anim { animation: slideIn 0.2s ease forwards; }
+.toast-anim { animation: slideInRight 0.3s ease forwards; }
+.modal-bg { animation: fadeIn 0.2s ease forwards; }
+
+@keyframes loadbar {
+  0%   { transform: scaleX(0); }
+  40%  { transform: scaleX(0.5); }
+  100% { transform: scaleX(1); }
+}
+.loadbar-anim {
+  transform-origin: left;
+  animation: loadbar 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes loadbarFade {
+  0%   { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.loadbar-fade { animation: loadbarFade 0.4s ease forwards; }
