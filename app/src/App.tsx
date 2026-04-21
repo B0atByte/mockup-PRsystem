@@ -1729,65 +1729,85 @@ export default function App() {
     setPage('dashboard');
   };
 
-  const handleCreateRequest = (data: Omit<PurchaseRequest, 'id' | 'reqNo' | 'createdAt' | 'updatedAt'>) => {
-    const newReq: PurchaseRequest = { ...data, id: `r${Date.now()}`, reqNo: `PR-2025-${String(requests.length + 1).padStart(3, '0')}`, createdAt: today(), updatedAt: today() };
-    setRequests(r => [...r, newReq]);
-    addAudit('CREATE', 'Purchase Request', `สร้างใบขอซื้อ ${newReq.reqNo}`);
-    toast(`สร้างใบขอซื้อ ${newReq.reqNo} สำเร็จ`);
-    setPage('my-requests');
+  const handleCreateRequest = async (data: Omit<PurchaseRequest, 'id' | 'reqNo' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const newReq = await api.requests.create(data);
+      setRequests(r => [...r, newReq]);
+      addAudit('CREATE', 'Purchase Request', `สร้างใบขอซื้อ ${newReq.reqNo}`);
+      toast(`สร้างใบขอซื้อ ${newReq.reqNo} สำเร็จ`);
+      setPage('my-requests');
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleIssuePRPO = (id: string, prf: string, pof: string, notes: string) => {
-    const n = requests.filter(x => x.prNo).length + 1;
-    const prNo = `PR-${String(n).padStart(3, '0')}`;
-    const poNo = `PO-${String(n).padStart(3, '0')}`;
-    setRequests(r => r.map(x => x.id === id ? { ...x, status: 'purchasing', prNo, poNo, prFile: prf, poFile: pof, notes, updatedAt: today() } : x));
-    addAudit('UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
-    toast('แนบเอกสาร PR/PO สำเร็จ พร้อมส่งต่อฝ่ายบัญชี');
-    setIssuePRReq(null); setPrFile(''); setPoFile(''); setPrNotes('');
+  const handleIssuePRPO = async (id: string, prf: string, pof: string, notes: string) => {
+    try {
+      const n = requests.filter(x => x.prNo).length + 1;
+      const prNo = `PR-${String(n).padStart(3, '0')}`;
+      const poNo = `PO-${String(n).padStart(3, '0')}`;
+      const updated = await api.requests.updateStatus(id, { status: 'purchasing', prNo, poNo, prFile: prf, poFile: pof, notes });
+      setRequests(r => r.map(x => x.id === id ? updated : x));
+      addAudit('UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
+      toast('แนบเอกสาร PR/PO สำเร็จ พร้อมส่งต่อฝ่ายบัญชี');
+      setIssuePRReq(null); setPrFile(''); setPoFile(''); setPrNotes('');
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleReject = (id: string) => {
-    setRequests(r => r.map(x => x.id === id ? { ...x, status: 'rejected', notes: 'ปฏิเสธโดยฝ่ายจัดซื้อ', updatedAt: today() } : x));
-    addAudit('REJECT', 'Purchase Request', `ปฏิเสธคำขอ`);
-    toast('ปฏิเสธคำขอแล้ว', 'info');
-    setRejectReq(null);
+  const handleReject = async (id: string) => {
+    try {
+      const updated = await api.requests.updateStatus(id, { status: 'rejected', notes: 'ปฏิเสธโดยฝ่ายจัดซื้อ' });
+      setRequests(r => r.map(x => x.id === id ? updated : x));
+      addAudit('REJECT', 'Purchase Request', 'ปฏิเสธคำขอ');
+      toast('ปฏิเสธคำขอแล้ว', 'info');
+      setRejectReq(null);
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleForward = (r: PurchaseRequest) => {
-    setRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'accounting', updatedAt: today() } : x));
-    addAudit('UPDATE', 'Purchase Request', `ส่งต่อบัญชี ${r.reqNo}`);
-    toast('ส่งต่อฝ่ายบัญชีสำเร็จ');
-    setForwardReq(null);
+  const handleForward = async (r: PurchaseRequest) => {
+    try {
+      const updated = await api.requests.updateStatus(r.id, { status: 'accounting' });
+      setRequests(prev => prev.map(x => x.id === r.id ? updated : x));
+      addAudit('UPDATE', 'Purchase Request', `ส่งต่อบัญชี ${r.reqNo}`);
+      toast('ส่งต่อฝ่ายบัญชีสำเร็จ');
+      setForwardReq(null);
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleTransfer = (id: string, ref: string, date: string, notes: string) => {
-    setRequests(r => r.map(x => x.id === id ? { ...x, status: 'transferred', transferRef: ref, transferDate: date, notes, updatedAt: today() } : x));
-    addAudit('UPDATE', 'Payment', `บันทึกการโอนเงิน ${ref}`);
-    toast(`บันทึกการโอนเงิน ${ref} สำเร็จ`);
-    setRecordPayReq(null); setTransferRef(''); setTransferNotes('');
+  const handleTransfer = async (id: string, ref: string, date: string, notes: string) => {
+    try {
+      const updated = await api.requests.updateStatus(id, { status: 'transferred', transferRef: ref, transferDate: date, notes });
+      setRequests(r => r.map(x => x.id === id ? updated : x));
+      addAudit('UPDATE', 'Payment', `บันทึกการโอนเงิน ${ref}`);
+      toast(`บันทึกการโอนเงิน ${ref} สำเร็จ`);
+      setRecordPayReq(null); setTransferRef(''); setTransferNotes('');
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleDeleteUser = (u: User) => {
-    setUsers(list => list.filter(x => x.id !== u.id));
-    addAudit('DELETE', 'User Management', `ลบผู้ใช้ ${u.username}`);
-    toast(`ลบผู้ใช้ ${u.name} แล้ว`, 'info');
-    setDeleteUserTarget(null);
+  const handleDeleteUser = async (u: User) => {
+    try {
+      await api.users.delete(u.id);
+      setUsers(list => list.filter(x => x.id !== u.id));
+      addAudit('DELETE', 'User Management', `ลบผู้ใช้ ${u.username}`);
+      toast(`ลบผู้ใช้ ${u.name} แล้ว`, 'info');
+      setDeleteUserTarget(null);
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleSaveUser = (data: Partial<User>) => {
-    if (editUserTarget) {
-      setUsers(list => list.map(u => u.id === editUserTarget.id ? { ...u, ...data } : u));
-      addAudit('UPDATE', 'User Management', `แก้ไขผู้ใช้ ${editUserTarget.username}`);
-      toast('บันทึกการแก้ไขสำเร็จ');
-    } else {
-      const newU: User = { id: `u${Date.now()}`, username: data.username!, password: data.password || '1234', name: data.name!, email: data.email!, role: data.role!, active: data.active ?? true, createdAt: today() };
-      setUsers(list => [...list, newU]);
-      addAudit('CREATE', 'User Management', `เพิ่มผู้ใช้ ${newU.username}`);
-      toast(`เพิ่มผู้ใช้ ${newU.name} สำเร็จ`);
-    }
-    setEditUserTarget(undefined);
-    setPage('user-management');
+  const handleSaveUser = async (data: Partial<User>) => {
+    try {
+      if (editUserTarget) {
+        const updated = await api.users.update(editUserTarget.id, data);
+        setUsers(list => list.map(u => u.id === editUserTarget.id ? updated : u));
+        addAudit('UPDATE', 'User Management', `แก้ไขผู้ใช้ ${editUserTarget.username}`);
+        toast('บันทึกการแก้ไขสำเร็จ');
+      } else {
+        const newU = await api.users.create(data);
+        setUsers(list => [...list, newU]);
+        addAudit('CREATE', 'User Management', `เพิ่มผู้ใช้ ${newU.username}`);
+        toast(`เพิ่มผู้ใช้ ${newU.name} สำเร็จ`);
+      }
+      setEditUserTarget(undefined);
+      setPage('user-management');
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
   if (!currentUser) return (
@@ -1899,12 +1919,14 @@ export default function App() {
       {/* Reset Password Confirm */}
       <ConfirmDialog open={!!resetPwUser} title="Reset Password"
         message={`ยืนยัน Reset Password ของ "${resetPwUser?.name}" ? รหัสผ่านใหม่จะเป็น "1234"`}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!resetPwUser) return;
-          setUsers(list => list.map(u => u.id === resetPwUser.id ? { ...u, password: '1234' } : u));
-          addAudit('UPDATE', 'User Management', `Reset password ของ ${resetPwUser.username}`);
-          toast(`Reset Password ของ ${resetPwUser.name} แล้ว (รหัสใหม่: 1234)`, 'warning');
-          setResetPwUser(null);
+          try {
+            await api.users.resetPassword(resetPwUser.id);
+            addAudit('UPDATE', 'User Management', `Reset password ของ ${resetPwUser.username}`);
+            toast(`Reset Password ของ ${resetPwUser.name} แล้ว (รหัสใหม่: 1234)`, 'warning');
+            setResetPwUser(null);
+          } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
         }}
         onCancel={() => setResetPwUser(null)} confirmLabel="Reset"
         confirmClass="bg-amber-500 hover:bg-amber-600 text-white" />
