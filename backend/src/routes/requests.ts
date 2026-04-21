@@ -82,10 +82,10 @@ requests.patch('/:id/status', async (c) => {
 
   // Role guard สำหรับแต่ละ action
   const allowedActions: Record<string, string[]> = {
-    purchasing: ['purchasing', 'rejected'],
-    accounting: ['accounting'],
-    transferred: ['accounting'],
-    rejected: ['purchasing'],
+    purchasing: ['purchasing'],   // จัดซื้อออก PR/PO
+    accounting: ['purchasing'],   // จัดซื้อ forward ไปบัญชี
+    transferred: ['accounting'],  // บัญชีบันทึกการโอน
+    rejected: ['purchasing'],     // จัดซื้อปฏิเสธ
   }
 
   const allowed = allowedActions[body.status]
