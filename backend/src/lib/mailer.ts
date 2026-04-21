@@ -9,16 +9,26 @@ const transporter = nodemailer.createTransport({
 })
 
 const FROM = process.env.SMTP_FROM || process.env.SMTP_USER || ''
+const SITE_URL = process.env.SITE_URL || 'http://localhost:5173'
 
 function fmt(n: number) {
   return n.toLocaleString('th-TH')
+}
+
+function loginButton() {
+  return `
+    <div style="margin-top:20px">
+      <a href="${SITE_URL}" style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600">
+        เข้าสู่ระบบ
+      </a>
+    </div>`
 }
 
 function base(title: string, body: string) {
   return `
   <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
     <div style="background:#1d4ed8;padding:20px 24px;border-radius:8px 8px 0 0">
-      <h2 style="color:#fff;margin:0;font-size:18px">🏪 Casa Lapin — ระบบขอซื้อสินค้า</h2>
+      <h2 style="color:#fff;margin:0;font-size:18px">Casa Lapin — ระบบขอซื้อสินค้า</h2>
     </div>
     <div style="background:#fff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e2e8f0">
       <h3 style="color:#1e293b;margin-top:0">${title}</h3>
@@ -29,23 +39,62 @@ function base(title: string, body: string) {
   </div>`
 }
 
+function table(rows: [string, string][]) {
+  return `
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      ${rows.map(([label, value]) => `
+        <tr>
+          <td style="padding:8px 0;color:#64748b;width:140px;vertical-align:top">${label}</td>
+          <td style="color:#1e293b">${value}</td>
+        </tr>`).join('')}
+    </table>`
+}
+
+// แจ้งฝ่ายจัดซื้อเมื่อมีใบขอซื้อใหม่
+export async function mailNewRequest(to: string[], req: {
+  reqNo: string; title: string; totalAmount: number; createdByName: string; category: string;
+}) {
+  const body = `
+    <p style="color:#475569">มีใบขอซื้อใหม่รอการพิจารณาจากฝ่ายจัดซื้อ</p>
+    ${table([
+      ['เลขที่ใบขอซื้อ', `<strong>${req.reqNo}</strong>`],
+      ['รายการ', `<strong>${req.title}</strong>`],
+      ['ผู้ขอ', req.createdByName],
+      ['หมวดหมู่', req.category],
+      ['ยอดรวม', `<strong style="color:#1d4ed8;font-size:16px">฿${fmt(req.totalAmount)}</strong>`],
+    ])}
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-top:16px">
+      <p style="color:#1d4ed8;margin:0;font-size:14px">กรุณาเข้าสู่ระบบเพื่อพิจารณาใบขอซื้อ</p>
+    </div>
+    ${loginButton()}`
+
+  await transporter.sendMail({
+    from: FROM, to: to.join(','),
+    subject: `[PR System] ใบขอซื้อใหม่ — ${req.reqNo} | ${req.title}`,
+    html: base('มีใบขอซื้อใหม่รอพิจารณา', body),
+  })
+}
+
 // แจ้งฝ่ายบัญชีเมื่อมีใบรอโอนเงิน
 export async function mailAccountingForward(to: string[], req: {
   reqNo: string; title: string; totalAmount: number; createdByName: string; prNo?: string; poNo?: string;
 }) {
+  const rows: [string, string][] = [
+    ['เลขที่ใบขอซื้อ', `<strong>${req.reqNo}</strong>`],
+    ['รายการ', `<strong>${req.title}</strong>`],
+    ['ผู้ขอ', req.createdByName],
+  ]
+  if (req.prNo) rows.push(['PR No.', `<span style="font-family:monospace">${req.prNo}</span>`])
+  if (req.poNo) rows.push(['PO No.', `<span style="font-family:monospace">${req.poNo}</span>`])
+  rows.push(['ยอดรวม', `<strong style="color:#1d4ed8;font-size:16px">฿${fmt(req.totalAmount)}</strong>`])
+
   const body = `
     <p style="color:#475569">มีใบขอซื้อถูกส่งมาให้ฝ่ายบัญชีดำเนินการโอนเงิน</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      <tr><td style="padding:8px 0;color:#64748b;width:140px">เลขที่ใบขอซื้อ</td><td style="font-weight:600;color:#1e293b">${req.reqNo}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">รายการ</td><td style="font-weight:600;color:#1e293b">${req.title}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">ผู้ขอ</td><td style="color:#1e293b">${req.createdByName}</td></tr>
-      ${req.prNo ? `<tr><td style="padding:8px 0;color:#64748b">PR No.</td><td style="font-family:monospace;color:#1e293b">${req.prNo}</td></tr>` : ''}
-      ${req.poNo ? `<tr><td style="padding:8px 0;color:#64748b">PO No.</td><td style="font-family:monospace;color:#1e293b">${req.poNo}</td></tr>` : ''}
-      <tr><td style="padding:8px 0;color:#64748b">ยอดรวม</td><td style="font-weight:700;color:#1d4ed8;font-size:16px">฿${fmt(req.totalAmount)}</td></tr>
-    </table>
+    ${table(rows)}
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 16px;margin-top:16px">
-      <p style="color:#1d4ed8;margin:0;font-size:14px">📋 กรุณาเข้าสู่ระบบเพื่อดำเนินการบันทึกการโอนเงิน</p>
-    </div>`
+      <p style="color:#1d4ed8;margin:0;font-size:14px">กรุณาเข้าสู่ระบบเพื่อดำเนินการบันทึกการโอนเงิน</p>
+    </div>
+    ${loginButton()}`
 
   await transporter.sendMail({
     from: FROM, to: to.join(','),
@@ -58,18 +107,21 @@ export async function mailAccountingForward(to: string[], req: {
 export async function mailTransferred(to: string, req: {
   reqNo: string; title: string; totalAmount: number; transferRef?: string; transferDate?: string;
 }) {
+  const rows: [string, string][] = [
+    ['เลขที่ใบขอซื้อ', `<strong>${req.reqNo}</strong>`],
+    ['รายการ', `<strong>${req.title}</strong>`],
+    ['ยอดรวม', `<strong style="color:#16a34a;font-size:16px">฿${fmt(req.totalAmount)}</strong>`],
+  ]
+  if (req.transferRef) rows.push(['เลข Ref.', `<span style="font-family:monospace">${req.transferRef}</span>`])
+  if (req.transferDate) rows.push(['วันที่โอน', req.transferDate])
+
   const body = `
     <p style="color:#475569">ฝ่ายบัญชีได้บันทึกการโอนเงินสำหรับใบขอซื้อของคุณแล้ว</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      <tr><td style="padding:8px 0;color:#64748b;width:140px">เลขที่ใบขอซื้อ</td><td style="font-weight:600;color:#1e293b">${req.reqNo}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">รายการ</td><td style="font-weight:600;color:#1e293b">${req.title}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">ยอดรวม</td><td style="font-weight:700;color:#16a34a;font-size:16px">฿${fmt(req.totalAmount)}</td></tr>
-      ${req.transferRef ? `<tr><td style="padding:8px 0;color:#64748b">เลข Ref.</td><td style="font-family:monospace;color:#1e293b">${req.transferRef}</td></tr>` : ''}
-      ${req.transferDate ? `<tr><td style="padding:8px 0;color:#64748b">วันที่โอน</td><td style="color:#1e293b">${req.transferDate}</td></tr>` : ''}
-    </table>
+    ${table(rows)}
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:16px">
-      <p style="color:#16a34a;margin:0;font-size:14px">✅ ดำเนินการเสร็จสิ้นแล้ว</p>
-    </div>`
+      <p style="color:#16a34a;margin:0;font-size:14px">ดำเนินการเสร็จสิ้นแล้ว</p>
+    </div>
+    ${loginButton()}`
 
   await transporter.sendMail({
     from: FROM, to,
@@ -82,16 +134,19 @@ export async function mailTransferred(to: string, req: {
 export async function mailRejected(to: string, req: {
   reqNo: string; title: string; notes?: string;
 }) {
+  const rows: [string, string][] = [
+    ['เลขที่ใบขอซื้อ', `<strong>${req.reqNo}</strong>`],
+    ['รายการ', `<strong>${req.title}</strong>`],
+  ]
+  if (req.notes) rows.push(['เหตุผล', `<span style="color:#dc2626">${req.notes}</span>`])
+
   const body = `
-    <p style="color:#475569">ใบขอซื้อของคุณถูกปฏิเสธโดยฝ่ายจัดซื้อ</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px">
-      <tr><td style="padding:8px 0;color:#64748b;width:140px">เลขที่ใบขอซื้อ</td><td style="font-weight:600;color:#1e293b">${req.reqNo}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">รายการ</td><td style="font-weight:600;color:#1e293b">${req.title}</td></tr>
-      ${req.notes ? `<tr><td style="padding:8px 0;color:#64748b">เหตุผล</td><td style="color:#dc2626">${req.notes}</td></tr>` : ''}
-    </table>
+    <p style="color:#475569">ใบขอซื้อของคุณถูกปฏิเสธ</p>
+    ${table(rows)}
     <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px 16px;margin-top:16px">
-      <p style="color:#dc2626;margin:0;font-size:14px">❌ กรุณาติดต่อฝ่ายจัดซื้อเพื่อข้อมูลเพิ่มเติม</p>
-    </div>`
+      <p style="color:#dc2626;margin:0;font-size:14px">กรุณาติดต่อฝ่ายจัดซื้อเพื่อข้อมูลเพิ่มเติม</p>
+    </div>
+    ${loginButton()}`
 
   await transporter.sendMail({
     from: FROM, to,

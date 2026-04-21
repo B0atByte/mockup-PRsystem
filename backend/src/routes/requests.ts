@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { prisma } from '../lib/prisma.js'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
-import { mailAccountingForward, mailTransferred, mailRejected } from '../lib/mailer.js'
+import { mailNewRequest, mailAccountingForward, mailTransferred, mailRejected } from '../lib/mailer.js'
 import type { RequestStatus } from '@prisma/client'
 
 const requests = new Hono()
@@ -72,7 +72,18 @@ requests.post('/', requireRole('employee'), async (c) => {
     include: { items: true },
   })
 
-  return c.json(formatRequest(data), 201)
+  // แจ้งฝ่ายจัดซื้อแบบ fire-and-forget
+  const r = formatRequest(data)
+  prisma.user.findMany({ where: { role: 'purchasing', active: true }, select: { email: true } })
+    .then(users => {
+      const emails = users.map(u => u.email).filter(Boolean) as string[]
+      console.log('[mail] new request → purchasing emails:', emails)
+      if (emails.length) mailNewRequest(emails, r)
+        .then(() => console.log('[mail] new request sent OK'))
+        .catch(e => console.error('[mail] new request error:', e.message))
+    }).catch(e => console.error('[mail] find purchasing error:', e.message))
+
+  return c.json(r, 201)
 })
 
 // PATCH /api/requests/:id/status — อัปเดตสถานะ
@@ -86,7 +97,7 @@ requests.patch('/:id/status', async (c) => {
     purchasing: ['purchasing'],   // จัดซื้อออก PR/PO
     accounting: ['purchasing'],   // จัดซื้อ forward ไปบัญชี
     transferred: ['accounting'],  // บัญชีบันทึกการโอน
-    rejected: ['purchasing'],     // จัดซื้อปฏิเสธ
+    rejected: ['purchasing', 'accounting'],  // จัดซื้อหรือบัญชีปฏิเสธ
   }
 
   const allowed = allowedActions[body.status]

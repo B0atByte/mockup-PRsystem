@@ -37,11 +37,26 @@ users.post('/', async (c) => {
 users.put('/:id', async (c) => {
   const { id } = c.req.param()
   const body = await c.req.json()
-  const data: any = { ...body }
-  if (data.password) data.password = await bcrypt.hash(data.password, 10)
-  else delete data.password
-  const user = await prisma.user.update({ where: { id }, data })
-  return c.json(safeUser(user))
+
+  const data: any = {
+    name: body.name,
+    username: body.username,
+    email: body.email,
+    role: body.role as Role,
+    active: body.active ?? true,
+  }
+  if (body.password) data.password = await bcrypt.hash(body.password, 10)
+
+  try {
+    const user = await prisma.user.update({ where: { id }, data })
+    return c.json(safeUser(user))
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      const field = err.meta?.target?.includes('email') ? 'Email' : 'Username'
+      return c.json({ error: `${field} นี้ถูกใช้งานแล้ว` }, 400)
+    }
+    throw err
+  }
 })
 
 users.delete('/:id', async (c) => {

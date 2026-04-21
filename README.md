@@ -6,16 +6,16 @@
 
 ## สถานะการพัฒนา (Development Progress)
 
-> **ปัจจุบันอยู่ระหว่าง Phase 5–6 — Core ใช้งานได้ครบแล้ว**
+> **ปัจจุบันอยู่ระหว่าง Phase 6–7 — Email notifications ครบทุก workflow แล้ว**
 
 | Phase | ชื่อ | สถานะ | หมายเหตุ |
 |-------|------|--------|---------|
 | **0** | Setup & Infrastructure | ✅ เสร็จ | |
 | **1** | Authentication | ✅ เสร็จ | |
-| **2** | Dashboard | 🟡 บางส่วน | ยังไม่มีกราฟใน Dashboard, ไม่มีตาราง 10 ล่าสุด |
+| **2** | Dashboard | 🟡 บางส่วน | ยังไม่มีกราฟใน Dashboard (มีเฉพาะในหน้า Reports) |
 | **3** | Employee Pages | ✅ เสร็จ | |
-| **4** | Purchasing Pages | 🟡 บางส่วน | ขาด Email แจ้งบัญชี |
-| **5** | Accounting Pages | 🟡 บางส่วน | ขาด Email แจ้งผู้ขอ, Export CSV, sort dueDate |
+| **4** | Purchasing Pages | ✅ เสร็จ | |
+| **5** | Accounting Pages | 🟡 บางส่วน | ขาด Export CSV, sort dueDate, filter วันที่ |
 | **6** | Tracking Page | 🟡 บางส่วน | ขาด Real-time polling/SSE |
 | **7** | IT Support Pages | 🟡 บางส่วน | ขาด Export PDF/Excel ในรายงาน |
 | **8** | PDF Generation | ⬜ ยังไม่ทำ | |
@@ -77,8 +77,9 @@
 - บันทึก prNo / poNo ลง DB
 
 **หน้าส่งต่อบัญชี**
-- ✅ Forward status → accounting
-- ⬜ ส่ง Email แจ้งฝ่ายบัญชี
+- Forward status → accounting
+- ส่ง Email แจ้งฝ่ายบัญชีทุกคนอัตโนมัติ (Gmail SMTP)
+- ส่ง Email แจ้งฝ่ายจัดซื้อเมื่อมีใบขอซื้อใหม่จากพนักงาน
 
 ---
 
@@ -88,9 +89,10 @@
 - ⬜ เรียงตาม dueDate ใกล้หมดก่อน (ปัจจุบันเรียงตาม updatedAt)
 
 **หน้าบันทึกการโอน**
-- ✅ บันทึก transferRef + transferDate + แนบสลิป ลง DB
-- ✅ อัปเดต status → transferred
-- ⬜ ส่ง Email แจ้งผู้ขอ
+- บันทึก transferRef + transferDate + แนบสลิป ลง DB
+- อัปเดต status → transferred
+- ส่ง Email แจ้งผู้ขอเมื่อโอนเงินสำเร็จ
+- ส่ง Email แจ้งผู้ขอเมื่อถูกปฏิเสธ (ทั้ง purchasing และ accounting ปฏิเสธได้)
 
 **หน้าประวัติการโอน**
 - ✅ ตาราง + search
@@ -219,6 +221,10 @@ MYSQL_DATABASE=pr_system
 MYSQL_USER=pruser
 MYSQL_PASSWORD=prpassword
 JWT_SECRET=your-secret-key
+SMTP_USER=your-gmail@gmail.com
+SMTP_PASS=your-gmail-app-password
+SMTP_FROM=Casa Lapin PR System <your-gmail@gmail.com>
+SITE_URL=http://your-server-ip:5173
 ```
 
 ### 2. รัน Backend + Database
