@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { prisma } from '../lib/prisma.js'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
+import { mailAccountingForward, mailTransferred, mailRejected } from '../lib/mailer.js'
 import type { RequestStatus } from '@prisma/client'
 
 const requests = new Hono()
@@ -112,7 +113,25 @@ requests.patch('/:id/status', async (c) => {
     include: { items: true },
   })
 
-  return c.json(formatRequest(updated))
+  // ส่งอีเมลแจ้งแบบ fire-and-forget
+  const r = formatRequest(updated)
+  if (body.status === 'accounting') {
+    prisma.user.findMany({ where: { role: 'accounting', active: true }, select: { email: true } })
+      .then(users => {
+        const emails = users.map(u => u.email).filter(Boolean)
+        if (emails.length) mailAccountingForward(emails, r).catch(console.error)
+      }).catch(console.error)
+  } else if (body.status === 'transferred') {
+    prisma.user.findUnique({ where: { id: updated.createdBy }, select: { email: true } })
+      .then(u => { if (u?.email) mailTransferred(u.email, r).catch(console.error) })
+      .catch(console.error)
+  } else if (body.status === 'rejected') {
+    prisma.user.findUnique({ where: { id: updated.createdBy }, select: { email: true } })
+      .then(u => { if (u?.email) mailRejected(u.email, { ...r, notes: body.notes }).catch(console.error) })
+      .catch(console.error)
+  }
+
+  return c.json(r)
 })
 
 export default requests
