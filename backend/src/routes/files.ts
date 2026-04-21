@@ -38,8 +38,8 @@ router.post('/', authMiddleware, async (c) => {
   return c.json({ url: `/api/files/${safeName}`, name: file.name })
 })
 
-// GET /api/files/:filename — เสิร์ฟไฟล์
-router.get('/:filename', authMiddleware, async (c) => {
+// GET /api/files/:filename — เสิร์ฟไฟล์ (public — filename เป็น random UUID)
+router.get('/:filename', async (c) => {
   const { filename } = c.req.param()
 
   if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {

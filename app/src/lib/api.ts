@@ -63,14 +63,8 @@ export const api = {
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
       return data
     },
-    open: async (url: string) => {
-      const res = await fetch(`${BASE_URL}${url}`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      })
-      if (!res.ok) throw new Error('ไม่พบไฟล์')
-      const blob = await res.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      window.open(blobUrl, '_blank')
+    open: (url: string) => {
+      window.open(`${BASE_URL}${url}`, '_blank')
     },
   },
 }
