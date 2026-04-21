@@ -1671,10 +1671,25 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
         {(req.prFile || req.poFile || req.transferFile) && (
           <div>
             <div className="text-[11px] text-slate-400 font-medium mb-2">ไฟล์เอกสารแนบ</div>
-            <div className="flex flex-wrap gap-2">
-              {req.prFile && <FileButton label="เอกสาร PR" url={req.prFile} />}
-              {req.poFile && <FileButton label="เอกสาร PO" url={req.poFile} />}
-              {req.transferFile && <FileButton label="สลิปโอนเงิน" url={req.transferFile} />}
+            <div className="flex flex-col gap-2">
+              {req.prFile && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">ฝ่ายจัดซื้อ</span>
+                  <FileButton label="เอกสาร PR" url={req.prFile} />
+                </div>
+              )}
+              {req.poFile && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">ฝ่ายจัดซื้อ</span>
+                  <FileButton label="เอกสาร PO" url={req.poFile} />
+                </div>
+              )}
+              {req.transferFile && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded px-1.5 py-0.5 font-medium whitespace-nowrap">ฝ่ายบัญชี</span>
+                  <FileButton label="สลิปโอนเงิน" url={req.transferFile} />
+                </div>
+              )}
             </div>
           </div>
         )}
