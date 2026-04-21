@@ -45,6 +45,11 @@ export const api = {
     log: (data: { action: string; module: string; detail: string }) =>
       req<any>('POST', '/api/audit', data),
   },
+  settings: {
+    get: () => req<any>('GET', '/api/settings'),
+    update: (data: { siteName?: string; siteSubtitle?: string; logoUrl?: string | null }) =>
+      req<any>('PUT', '/api/settings', data),
+  },
   files: {
     upload: async (file: File): Promise<{ url: string; name: string }> => {
       const form = new FormData()

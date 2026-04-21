@@ -104,6 +104,18 @@ model PurchaseItem {
   @@map("purchase_items")
 }
 
+model Settings {
+  id        String   @id @default("singleton")
+  siteName  String   @default("Casa Lapin")
+  siteSubtitle String @default("ระบบขอซื้อสินค้า")
+  logoUrl   String?  @db.Text
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+  updatedByName String?
+
+  @@map("settings")
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String

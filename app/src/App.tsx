@@ -23,7 +23,9 @@ type Page =
   | 'pending-approval' | 'issue-pr-po' | 'forward-accounting'
   | 'payment-list' | 'record-payment' | 'payment-history'
   | 'user-management' | 'add-user' | 'audit-log'
-  | 'all-requests' | 'reports' | 'tracking';
+  | 'all-requests' | 'reports' | 'tracking' | 'site-settings';
+
+interface SiteSettings { siteName: string; siteSubtitle: string; logoUrl?: string | null; updatedByName?: string; updatedAt?: string; }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 0 });
@@ -37,12 +39,12 @@ function ToastContainer({ toasts, remove }: { toasts: Toast[]; remove: (id: stri
         <div key={t.id} className={`toast-anim pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium min-w-[260px] max-w-sm
           ${t.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
             t.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
-            t.type === 'warning' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-            'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+              t.type === 'warning' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                'bg-blue-50 text-blue-800 border border-blue-200'}`}>
           {t.type === 'success' ? <CheckCircle size={15} className="text-green-600 shrink-0" /> :
-           t.type === 'error' ? <XCircle size={15} className="text-red-600 shrink-0" /> :
-           t.type === 'warning' ? <AlertCircle size={15} className="text-amber-600 shrink-0" /> :
-           <AlertCircle size={15} className="text-blue-600 shrink-0" />}
+            t.type === 'error' ? <XCircle size={15} className="text-red-600 shrink-0" /> :
+              t.type === 'warning' ? <AlertCircle size={15} className="text-amber-600 shrink-0" /> :
+                <AlertCircle size={15} className="text-blue-600 shrink-0" />}
           <span className="flex-1">{t.message}</span>
           <button onClick={() => remove(t.id)} className="opacity-50 hover:opacity-100 transition-opacity"><X size={13} /></button>
         </div>
@@ -341,7 +343,7 @@ function FileButton({ label, raw }: { label: string; raw: string }) {
 // ═══════════════════════════════════════════════════════════════════
 // LOGIN PAGE
 // ═══════════════════════════════════════════════════════════════════
-function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
+function LoginPage({ onLogin, siteSettings }: { onLogin: (u: User) => void; siteSettings: SiteSettings }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -378,16 +380,16 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           localStorage.setItem('theme', isDark ? 'dark' : 'light');
           // Note: Since this is outside the main App state, it might need a page refresh or a shared state if we want it perfectly synced.
           // But for a simple implementation, we can just trigger a reload or use a small hack.
-          window.location.reload(); 
+          window.location.reload();
         }} className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 shadow-sm hover:scale-105 transition-all">
           {document.documentElement.classList.contains('dark') ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </div>
       <div className="w-full max-w-[420px]">
         <div className="text-center mb-7">
-          <img src={casaLapinLogo} alt="Casa Lapin" className="w-20 h-20 object-contain mx-auto mb-4 drop-shadow-md" />
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Casa Lapin</h1>
-          <p className="text-slate-400 text-sm mt-1">Purchase Request System</p>
+          <img src={siteSettings.logoUrl || casaLapinLogo} alt="logo" className="w-20 h-20 object-contain mx-auto mb-4 drop-shadow-md rounded-xl" />
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">{siteSettings.siteName}</h1>
+          <p className="text-slate-400 text-sm mt-1">{siteSettings.siteSubtitle}</p>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-7">
@@ -447,21 +449,22 @@ const MENU: MenuItem[] = [
   { id: 'user-management', label: 'จัดการผู้ใช้', icon: Users, roles: ['itsupport'] },
   { id: 'add-user', label: 'เพิ่มผู้ใช้ใหม่', icon: UserPlus, roles: ['itsupport'] },
   { id: 'audit-log', label: 'Audit Log', icon: Activity, roles: ['itsupport'] },
+  { id: 'site-settings', label: 'ตั้งค่าเว็บไซต์', icon: Shield, roles: ['itsupport'] },
 ];
 
-function Sidebar({ user, page, setPage, collapsed, dark, toggleDark, mobileOpen, setMobileOpen }: {
-  user: User; page: Page; setPage: (p: Page) => void; collapsed: boolean; dark: boolean; toggleDark: () => void; mobileOpen: boolean; setMobileOpen: (v: boolean) => void;
+function Sidebar({ user, page, setPage, collapsed, dark, toggleDark, mobileOpen, setMobileOpen, siteSettings }: {
+  user: User; page: Page; setPage: (p: Page) => void; collapsed: boolean; dark: boolean; toggleDark: () => void; mobileOpen: boolean; setMobileOpen: (v: boolean) => void; siteSettings: SiteSettings;
 }) {
   const items = MENU.filter(m => m.roles.includes(user.role));
   return (
     <aside className={`fixed md:relative z-40 h-screen flex flex-col bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 transition-transform md:transition-all duration-200 shrink-0 w-64 ${collapsed ? 'md:w-14' : 'md:w-56'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Logo */}
       <div className={`flex items-center gap-3 px-3 py-4 border-b border-slate-100 dark:border-slate-800 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <img src={casaLapinLogo} alt="Casa Lapin" className="w-8 h-8 object-contain shrink-0" />
+        <img src={siteSettings.logoUrl || casaLapinLogo} alt="logo" className="w-8 h-8 object-contain shrink-0 rounded" />
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight">Casa Lapin</div>
-            <div className="text-[10px] text-slate-400">ระบบขอซื้อสินค้า</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight truncate">{siteSettings.siteName}</div>
+            <div className="text-[10px] text-slate-400 truncate">{siteSettings.siteSubtitle}</div>
           </div>
         )}
       </div>
@@ -852,7 +855,7 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                 {/* Header */}
                 <div className="grid bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-400 uppercase tracking-wide"
                   style={{ gridTemplateColumns: '80px 1fr 64px 80px 100px 1fr 36px' }}>
-                  {['Code','รายการ','จำนวน','หน่วย','ราคา','หมายเหตุ',''].map((h, i) => (
+                  {['Code', 'รายการ', 'จำนวน', 'หน่วย', 'ราคา', 'หมายเหตุ', ''].map((h, i) => (
                     <div key={i} className={`px-2 py-2 ${i < 6 ? 'border-r border-slate-200 dark:border-slate-700' : ''} ${i >= 2 && i <= 4 ? 'text-center' : ''}`}>{h}</div>
                   ))}
                 </div>
@@ -861,17 +864,17 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                   {items.map((item, i) => (
                     <div key={i} className="grid items-stretch" style={{ gridTemplateColumns: '80px 1fr 64px 80px 100px 1fr 36px' }}>
                       {[
-                        <input key="code" value={item.code} onChange={e => updateItem(i,'code',e.target.value)} placeholder="C..."
+                        <input key="code" value={item.code} onChange={e => updateItem(i, 'code', e.target.value)} placeholder="C..."
                           className="w-full h-full px-2 py-2 text-xs bg-transparent outline-none text-slate-600 dark:text-slate-300 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
-                        <input key="name" value={item.name} onChange={e => updateItem(i,'name',e.target.value)} placeholder="ชื่อสินค้า"
+                        <input key="name" value={item.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="ชื่อสินค้า"
                           className="w-full h-full px-2 py-2 text-sm bg-transparent outline-none text-slate-700 dark:text-slate-200 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
-                        <input key="qty" type="number" value={item.qty} onChange={e => updateItem(i,'qty',+e.target.value)} min={1}
+                        <input key="qty" type="number" value={item.qty} onChange={e => updateItem(i, 'qty', +e.target.value)} min={1}
                           className="w-full h-full px-2 py-2 text-sm text-center bg-transparent outline-none text-slate-700 dark:text-slate-200 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
-                        <input key="unit" value={item.unit} onChange={e => updateItem(i,'unit',e.target.value)} placeholder="หน่วย"
+                        <input key="unit" value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)} placeholder="หน่วย"
                           className="w-full h-full px-2 py-2 text-xs text-center bg-transparent outline-none text-slate-600 dark:text-slate-300 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
-                        <input key="price" type="number" value={item.price || ''} onChange={e => updateItem(i,'price',+e.target.value)} placeholder="0"
+                        <input key="price" type="number" value={item.price || ''} onChange={e => updateItem(i, 'price', +e.target.value)} placeholder="0"
                           className="w-full h-full px-2 py-2 text-sm text-right bg-transparent outline-none text-slate-700 dark:text-slate-200 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
-                        <input key="note" value={item.itemNote} onChange={e => updateItem(i,'itemNote',e.target.value)} placeholder="-"
+                        <input key="note" value={item.itemNote} onChange={e => updateItem(i, 'itemNote', e.target.value)} placeholder="-"
                           className="w-full h-full px-2 py-2 text-xs bg-transparent outline-none text-slate-400 focus:bg-blue-50 dark:focus:bg-blue-900/20" />,
                         <div key="del" className="flex items-center justify-center">
                           {items.length > 1 && (
@@ -894,7 +897,7 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                 {items.map((item, i) => (
                   <div key={i} className="p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
-                      <input value={item.name} onChange={e => updateItem(i,'name',e.target.value)} placeholder="ชื่อสินค้า *"
+                      <input value={item.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="ชื่อสินค้า *"
                         className="flex-1 px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-slate-700 dark:text-slate-200" />
                       {items.length > 1 && (
                         <button onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
@@ -906,22 +909,22 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                     <div className="grid grid-cols-4 gap-1.5">
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[10px] text-slate-400">Code</span>
-                        <input value={item.code} onChange={e => updateItem(i,'code',e.target.value)} placeholder="C..."
+                        <input value={item.code} onChange={e => updateItem(i, 'code', e.target.value)} placeholder="C..."
                           className="px-2 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-blue-400 text-slate-600 dark:text-slate-300" />
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[10px] text-slate-400">จำนวน</span>
-                        <input type="number" value={item.qty} onChange={e => updateItem(i,'qty',+e.target.value)} min={1}
+                        <input type="number" value={item.qty} onChange={e => updateItem(i, 'qty', +e.target.value)} min={1}
                           className="px-2 py-1.5 text-sm text-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 dark:text-slate-200" />
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[10px] text-slate-400">หน่วย</span>
-                        <input value={item.unit} onChange={e => updateItem(i,'unit',e.target.value)} placeholder="หน่วย"
+                        <input value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)} placeholder="หน่วย"
                           className="px-2 py-1.5 text-xs text-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-blue-400 text-slate-600 dark:text-slate-300" />
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-[10px] text-slate-400">ราคา</span>
-                        <input type="number" value={item.price || ''} onChange={e => updateItem(i,'price',+e.target.value)} placeholder="0"
+                        <input type="number" value={item.price || ''} onChange={e => updateItem(i, 'price', +e.target.value)} placeholder="0"
                           className="px-2 py-1.5 text-sm text-right rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 dark:text-slate-200" />
                       </div>
                     </div>
@@ -1458,20 +1461,20 @@ function TrackingPage({ requests, user, onView }: {
 
   const lineColor = (state: StepState) =>
     state === 'done' ? 'bg-green-400' :
-    state === 'rejected' ? 'bg-red-300 dark:bg-red-800' :
-    'bg-slate-200 dark:bg-slate-700';
+      state === 'rejected' ? 'bg-red-300 dark:bg-red-800' :
+        'bg-slate-200 dark:bg-slate-700';
 
   const circleClass = (state: StepState) =>
     state === 'done' ? 'bg-green-500 border-green-500' :
-    state === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
-    state === 'rejected' ? 'bg-red-500 border-red-500' :
-    'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+      state === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
+        state === 'rejected' ? 'bg-red-500 border-red-500' :
+          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
 
   const labelClass = (state: StepState) =>
     state === 'done' ? 'text-green-600 dark:text-green-400' :
-    state === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
-    state === 'rejected' ? 'text-red-500 dark:text-red-400' :
-    'text-slate-400';
+      state === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
+        state === 'rejected' ? 'text-red-500 dark:text-red-400' :
+          'text-slate-400';
 
   const visible = requests
     .filter(r => user.role === 'employee' ? r.createdBy === user.id : true)
@@ -1608,13 +1611,13 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
     st === 'done' ? 'bg-green-400' : st === 'rejected' ? 'bg-red-300 dark:bg-red-800' : 'bg-slate-200 dark:bg-slate-700';
   const circleClass = (st: StepState) =>
     st === 'done' ? 'bg-green-500 border-green-500' :
-    st === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
-    st === 'rejected' ? 'bg-red-500 border-red-500' :
-    'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+      st === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
+        st === 'rejected' ? 'bg-red-500 border-red-500' :
+          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
   const labelClass = (st: StepState) =>
     st === 'done' ? 'text-green-600 dark:text-green-400' :
-    st === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
-    st === 'rejected' ? 'text-red-500 dark:text-red-400' : 'text-slate-400';
+      st === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
+        st === 'rejected' ? 'text-red-500 dark:text-red-400' : 'text-slate-400';
 
   return (
     <Modal open title={`${req.reqNo} — รายละเอียด`} onClose={onClose}>
@@ -1704,12 +1707,114 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// SITE SETTINGS PAGE
+// ═══════════════════════════════════════════════════════════════════
+function SiteSettingsPage({ current, onSave, toast }: {
+  current: SiteSettings;
+  onSave: (s: SiteSettings) => void;
+  toast: (m: string, t?: Toast['type']) => void;
+}) {
+  const [siteName, setSiteName] = useState(current.siteName);
+  const [siteSubtitle, setSiteSubtitle] = useState(current.siteSubtitle);
+  const [logoUrl, setLogoUrl] = useState(current.logoUrl || '');
+  const [logoName, setLogoName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!siteName.trim()) return toast('กรุณากรอกชื่อเว็บไซต์', 'error');
+    setSaving(true);
+    try {
+      const updated = await api.settings.update({ siteName: siteName.trim(), siteSubtitle: siteSubtitle.trim(), logoUrl: logoUrl || null });
+      onSave(updated);
+      toast('บันทึกการตั้งค่าสำเร็จ');
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleReset = () => {
+    setSiteName(current.siteName);
+    setSiteSubtitle(current.siteSubtitle);
+    setLogoUrl(current.logoUrl || '');
+    setLogoName('');
+  };
+
+  const previewLogo = logoUrl.startsWith('/api/files/') ? logoUrl : (logoUrl || null);
+
+  return (
+    <div className="page-anim max-w-xl flex flex-col gap-5">
+      <Card title="ตั้งค่าเว็บไซต์">
+        <div className="p-5 flex flex-col gap-5">
+
+          {/* Preview */}
+          <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+            {previewLogo ? (
+              <img
+                src={previewLogo.startsWith('/api/') ? previewLogo : previewLogo}
+                alt="logo preview"
+                className="w-14 h-14 object-contain rounded-xl bg-white dark:bg-slate-700 p-1 border border-slate-200 dark:border-slate-600"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center border border-blue-200 dark:border-blue-800">
+                <Shield size={24} className="text-blue-500" />
+              </div>
+            )}
+            <div>
+              <div className="font-bold text-slate-800 dark:text-white text-base">{siteName || 'ชื่อเว็บไซต์'}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{siteSubtitle || 'คำอธิบาย'}</div>
+            </div>
+          </div>
+
+          {/* Logo Upload */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">โลโก้</label>
+            <FileUploadField
+              label=""
+              fileName={logoName}
+              onFile={(name, url) => { setLogoName(name); setLogoUrl(url); }}
+              onError={msg => toast(msg, 'error')}
+            />
+            {logoUrl && !logoName && (
+              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                <span>โลโก้ปัจจุบัน: ใช้งานอยู่</span>
+                <button onClick={() => setLogoUrl('')} className="text-red-400 hover:text-red-600">ลบโลโก้</button>
+              </div>
+            )}
+          </div>
+
+          <Input label="ชื่อเว็บไซต์ / ชื่อร้าน *" value={siteName} onChange={e => setSiteName(e.target.value)} placeholder="เช่น Casa Lapin" />
+          <Input label="คำอธิบายใต้ชื่อ" value={siteSubtitle} onChange={e => setSiteSubtitle(e.target.value)} placeholder="เช่น ระบบขอซื้อสินค้า" />
+
+          {current.updatedByName && (
+            <div className="text-[11px] text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2 border border-slate-100 dark:border-slate-700">
+              แก้ไขล่าสุดโดย <span className="font-medium text-slate-600 dark:text-slate-300">{current.updatedByName}</span>
+              {current.updatedAt && <span> · {new Date(current.updatedAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}</span>}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={handleSave} disabled={saving}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+              {saving ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              บันทึกการตั้งค่า
+            </button>
+            <button onClick={handleReset} className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              รีเซ็ต
+            </button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [page, setPage] = useState<Page>('dashboard');
   const [collapsed, setCollapsed] = useState(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>({ siteName: 'Casa Lapin', siteSubtitle: 'ระบบขอซื้อสินค้า', logoUrl: null });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -1765,6 +1870,7 @@ export default function App() {
   // Fetch data เมื่อ login สำเร็จ
   useEffect(() => {
     if (!currentUser) { setRequests([]); setUsers([]); setAuditLogs([]); return; }
+    api.settings.get().then(setSiteSettings).catch(console.error);
     api.requests.list().then(setRequests).catch(console.error);
     if (currentUser.role === 'itsupport') {
       api.users.list().then(setUsers).catch(console.error);
@@ -1886,7 +1992,7 @@ export default function App() {
 
   if (!currentUser) return (
     <>
-      <LoginPage onLogin={handleLogin} />
+      <LoginPage onLogin={handleLogin} siteSettings={siteSettings} />
       <ToastContainer toasts={toasts} remove={id => setToasts(t => t.filter(x => x.id !== id))} />
     </>
   );
@@ -1905,6 +2011,7 @@ export default function App() {
       case 'user-management': return <UserManagementPage users={users} onAdd={() => { setEditUserTarget(null); setPage('add-user'); }} onEdit={u => { setEditUserTarget(u); setPage('add-user'); }} onDelete={setDeleteUserTarget} onReset={setResetPwUser} />;
       case 'add-user': return <AddUserPage editUser={editUserTarget} onSave={handleSaveUser} />;
       case 'audit-log': return <AuditLogPage logs={auditLogs} />;
+      case 'site-settings': return <SiteSettingsPage current={siteSettings} onSave={setSiteSettings} toast={toast} />;
       case 'all-requests': return <AllRequestsPage requests={requests} />;
       case 'reports': return <ReportsPage requests={requests} />;
       case 'tracking': return <TrackingPage requests={requests} user={currentUser} onView={setViewReq} />;
@@ -1914,7 +2021,7 @@ export default function App() {
   return (
     <div className={`flex h-screen overflow-hidden ${dark ? 'dark' : ''} bg-slate-50 dark:bg-slate-950`}>
       {mobileOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setMobileOpen(false)} />}
-      <Sidebar user={currentUser} page={page} setPage={navigate} collapsed={collapsed} dark={dark} toggleDark={() => setDark(!dark)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <Sidebar user={currentUser} page={page} setPage={navigate} collapsed={collapsed} dark={dark} toggleDark={() => setDark(!dark)} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} siteSettings={siteSettings} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Topbar page={page} user={currentUser} requests={requests} onLogout={handleLogout} collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
