@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import casaLapinLogo from './assets/casa_lapin_logo.png';
 import {
-  LayoutDashboard, ShoppingCart, FileText, CreditCard, Users, LogOut,
+  LayoutDashboard, FileText, CreditCard, Users, LogOut,
   Bell, Search, X, ChevronRight, Plus, Trash2, Edit2, Eye,
   CheckCircle, XCircle, Clock, DollarSign, AlertCircle,
   Upload, Moon, Sun, ChevronDown, Activity,
@@ -384,10 +385,8 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       </div>
       <div className="w-full max-w-[420px]">
         <div className="text-center mb-7">
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200 dark:shadow-blue-900">
-            <ShoppingCart size={26} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">ระบบขอซื้อสินค้า</h1>
+          <img src={casaLapinLogo} alt="Casa Lapin" className="w-20 h-20 object-contain mx-auto mb-4 drop-shadow-md" />
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">Casa Lapin</h1>
           <p className="text-slate-400 text-sm mt-1">Purchase Request System</p>
         </div>
 
@@ -458,12 +457,10 @@ function Sidebar({ user, page, setPage, collapsed, dark, toggleDark, mobileOpen,
     <aside className={`fixed md:relative z-40 h-screen flex flex-col bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 transition-transform md:transition-all duration-200 shrink-0 w-64 ${collapsed ? 'md:w-14' : 'md:w-56'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Logo */}
       <div className={`flex items-center gap-3 px-3 py-4 border-b border-slate-100 dark:border-slate-800 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
-          <ShoppingCart size={15} className="text-white" />
-        </div>
+        <img src={casaLapinLogo} alt="Casa Lapin" className="w-8 h-8 object-contain shrink-0" />
         {!collapsed && (
           <div className="min-w-0">
-            <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight">PR System</div>
+            <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight">Casa Lapin</div>
             <div className="text-[10px] text-slate-400">ระบบขอซื้อสินค้า</div>
           </div>
         )}
