@@ -4,22 +4,149 @@
 
 ---
 
-## สถานะการพัฒนา
+## สถานะการพัฒนา (Development Progress)
 
-> **ปัจจุบันอยู่ Phase 2 (เสร็จแล้ว) — กำลังเข้าสู่ Phase 3**
+> **ปัจจุบันอยู่ระหว่าง Phase 5–6 — Core ใช้งานได้ครบแล้ว**
 
-| Phase | ชื่อ | รายละเอียด | สถานะ |
-|-------|------|-----------|--------|
-| **1** | Backend Foundation | Docker + MySQL + Prisma + JWT + API Routes ทั้งหมด | ✅ เสร็จ |
-| **2** | Frontend → API | เชื่อม frontend ทุก action ไป real API + ระบบไฟล์แนบ + role permissions | ✅ เสร็จ |
-| **3** | Dashboard & Reports | Dashboard ดึงข้อมูลจริง, กราฟสถิติ real-time | ⬜ ถัดไป |
-| **4** | Polish & UX | Validation เพิ่มเติม, error handling, loading states | ⬜ |
-| **5** | PDF Generation | ออก PDF ใบขอซื้อ, PR, PO | ⬜ |
-| **6** | Testing + Deploy | End-to-end test, Nginx, Production Docker | ⬜ |
+| Phase | ชื่อ | สถานะ |
+|-------|------|--------|
+| **0** | Setup & Infrastructure | ✅ เสร็จ |
+| **1** | Authentication | ✅ เสร็จ |
+| **2** | Dashboard | 🟡 บางส่วน |
+| **3** | Employee Pages | ✅ เสร็จ |
+| **4** | Purchasing Pages | ✅ เสร็จ |
+| **5** | Accounting Pages | 🟡 บางส่วน |
+| **6** | Tracking Page | ✅ เสร็จ |
+| **7** | IT Support Pages | ✅ เสร็จ |
+| **8** | PDF Generation | ⬜ ยังไม่ทำ |
+| **9** | Testing & QA | ⬜ ยังไม่ทำ |
+| **10** | Deploy & Go Live | ⬜ ยังไม่ทำ |
 
 ---
 
-## ภาพรวมระบบ
+## รายละเอียดแต่ละ Phase
+
+### ✅ Phase 0 — Setup & Infrastructure
+- โครงสร้าง Monorepo (frontend + backend แยก folder)
+- Docker Compose: MySQL 8.0 + Node.js backend + phpMyAdmin
+- Database schema ด้วย Prisma ORM (User, PurchaseRequest, PurchaseItem, AuditLog, Settings)
+- Environment config (.env)
+- Git repository + .gitignore
+
+---
+
+### ✅ Phase 1 — Authentication
+- หน้า Login พร้อม demo account shortcuts
+- JWT login / logout จริง (8 ชั่วโมง)
+- bcrypt password hash
+- Role-based middleware guard ทุก API endpoint
+- Auto-login จาก token ใน localStorage
+- Redirect ไปหน้า Login เมื่อ session หมดอายุ
+
+---
+
+### 🟡 Phase 2 — Dashboard
+- ✅ Stat cards ดึงข้อมูลจาก DB จริง (จำนวนคำขอ, ยอดรวม, สถานะ)
+- ✅ Filter ตาม role อัตโนมัติ
+- ⬜ กราฟ Bar/Pie จากข้อมูลจริง (ยังเป็น mock)
+- ⬜ ตารางคำขอล่าสุด 10 รายการ
+
+---
+
+### ✅ Phase 3 — Employee Pages
+**หน้าสร้างใบขอซื้อ**
+- Form submit → บันทึก DB จริง
+- Auto-generate เลขใบขอซื้อ (PR-2568-001)
+- Toast notification เมื่อสำเร็จ
+
+**หน้าคำขอของฉัน**
+- ดึงเฉพาะ request ของ user นั้นจาก DB
+- Filter ตามสถานะ
+- กดดูรายละเอียดเปิด modal พร้อม timeline
+
+---
+
+### ✅ Phase 4 — Purchasing Pages
+**หน้ารออนุมัติ**
+- List pending requests จาก DB
+- ปุ่ม Approve / Reject พร้อมบันทึก audit log
+
+**หน้าออก PR/PO**
+- Upload ไฟล์จริง → บันทึก local disk (`backend/uploads/`)
+- แสดงผู้อัปโหลด + role + เวลา
+- บันทึก prNo / poNo ลง DB
+
+**หน้าส่งต่อบัญชี**
+- Forward status → accounting
+- ⬜ ส่ง Email แจ้งฝ่ายบัญชี (ยังไม่ทำ)
+
+---
+
+### 🟡 Phase 5 — Accounting Pages
+**หน้ารายการรอโอนเงิน**
+- ✅ ดึง status = accounting จาก DB
+
+**หน้าบันทึกการโอน**
+- ✅ บันทึก transferRef + transferDate + แนบสลิป ลง DB
+- ✅ อัปเดต status → transferred
+- ⬜ ส่ง Email แจ้งผู้ขอ (ยังไม่ทำ)
+
+**หน้าประวัติการโอน**
+- ✅ ตาราง + filter
+- ⬜ Export CSV (ยังไม่ทำ)
+
+---
+
+### ✅ Phase 6 — Tracking Page
+- Timeline ดึงจาก DB จริง พร้อมวันที่แต่ละขั้น
+- Employee เห็นเฉพาะของตัวเอง
+- กดการ์ดเพื่อดูรายละเอียดเต็ม + ไฟล์แนบ
+- ⬜ Real-time polling / SSE (ยังไม่ทำ)
+
+---
+
+### ✅ Phase 7 — IT Support Pages
+**หน้าจัดการผู้ใช้**
+- CRUD user ลง DB (เพิ่ม / แก้ไข / ลบ)
+- Reset password (รีเซ็ตเป็น 1234)
+- Toggle active / inactive
+
+**หน้า Audit Log**
+- บันทึก log ทุก action ลง DB
+- แสดง user, action, module, เวลา, IP
+
+**ตั้งค่าเว็บไซต์** *(bonus)*
+- เปลี่ยนโลโก้ + ชื่อร้าน + subtitle ผ่าน UI
+- มีผล ทันทีทั้ง Login page, Sidebar, Favicon, Title
+
+---
+
+### ⬜ Phase 8 — PDF Generation
+- Template ใบ PR (header บริษัท, รายการ, ผู้อนุมัติ)
+- Template ใบ PO
+- Download PDF จากหน้า detail
+- แนบ PDF ใน Email อัตโนมัติ
+
+---
+
+### ⬜ Phase 9 — Testing & QA
+- ทดสอบ workflow ทุก role ครบทุก path
+- Edge cases: file ใหญ่, network error, session หมดอายุ
+- UAT กับผู้ใช้จริงในทีม
+- Bug fix จาก feedback
+
+---
+
+### ⬜ Phase 10 — Deploy & Go Live
+- Setup VPS + Nginx + SSL
+- Docker Compose production mode
+- Import ข้อมูลเก่า (ถ้ามี)
+- สร้าง user จริงทุก account
+- Monitor + รับ feedback สัปดาห์แรก
+
+---
+
+## ภาพรวม Workflow
 
 ```
 พนักงาน: สร้างใบขอซื้อ
@@ -46,7 +173,6 @@
 | Build Tool | Vite 8 |
 | Styling | Tailwind CSS v4 |
 | Icons | Lucide React |
-| Routing | useState (ไม่ใช้ router library) |
 
 ### Backend
 | ส่วน | เทคโนโลยี |
@@ -108,10 +234,10 @@ npm run dev
 
 เปิดที่ `http://localhost:5173`
 
-### รันให้เครื่องอื่นใน LAN เข้าได้
-Vite ตั้งค่า `host: true` ไว้แล้ว — เปิด `http://<IP เครื่อง>:5173` จากเครื่องอื่นได้เลย
+### LAN Access
+Vite ตั้งค่า `host: true` ไว้แล้ว — เปิด `http://<IP เครื่อง>:5173` จากเครื่องอื่นในวงได้เลย
 
-> **หมายเหตุ:** ต้องเพิ่ม Firewall rule ให้ port 5173 ก่อน (port 3000 Docker จัดการให้อัตโนมัติ)
+> Windows ต้องเพิ่ม Firewall rule ก่อน:
 > ```powershell
 > New-NetFirewallRule -DisplayName "Vite Dev Server" -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow
 > ```
@@ -123,7 +249,7 @@ Vite ตั้งค่า `host: true` ไว้แล้ว — เปิด `
 | Service | Port | URL |
 |---------|------|-----|
 | Frontend (Vite) | 5173 | http://localhost:5173 |
-| Backend (Hono) | 3000 | http://localhost:3000 |
+| Backend API (Hono) | 3000 | http://localhost:3000 |
 | MySQL | 3306 | — |
 | phpMyAdmin | 8080 | http://localhost:8080 |
 
@@ -144,69 +270,31 @@ Vite ตั้งค่า `host: true` ไว้แล้ว — เปิด `
 
 ---
 
-## หน้าจอหลัก
-
-| หน้า | เข้าถึงได้โดย |
-|------|-------------|
-| แดชบอร์ด | owner, itsupport |
-| ติดตามคำขอ | **ทุก role** |
-| สร้างใบขอซื้อ | employee |
-| คำขอของฉัน | employee |
-| รายการรออนุมัติ | purchasing, itsupport |
-| ออก PR/PO | purchasing |
-| ส่งต่อบัญชี | purchasing |
-| รายการรอโอนเงิน | accounting, itsupport |
-| บันทึกการโอนเงิน | accounting |
-| ประวัติการโอน | accounting, itsupport |
-| คำขอทั้งหมด | owner, itsupport |
-| รายงานสรุป | owner |
-| จัดการผู้ใช้ | itsupport |
-| Audit Log | itsupport |
-| **ตั้งค่าเว็บไซต์** | itsupport |
-
----
-
-## Features ที่ทำเสร็จแล้ว
-
-- ✅ Authentication ด้วย JWT (login/logout/auto-login)
-- ✅ Role-based access control (5 roles)
-- ✅ Workflow ใบขอซื้อ 4 ขั้นตอน (pending → purchasing → accounting → transferred)
-- ✅ แนบไฟล์จริง (PR, PO, สลิปโอนเงิน) — อัปโหลดไปเก็บบน server
-- ✅ แสดงผู้แนบไฟล์ + role + เวลาที่แนบ
-- ✅ Tracking timeline ทุก role
-- ✅ Audit Log บันทึกทุก action
-- ✅ จัดการผู้ใช้ (เพิ่ม/แก้ไข/ลบ/reset password)
-- ✅ ตั้งค่าโลโก้และชื่อเว็บไซต์ผ่าน IT Support
-- ✅ Dark mode
-- ✅ รองรับ LAN (เครื่องอื่นในวงเดียวกันเข้าได้)
-
----
-
 ## โครงสร้างโปรเจ็ค
 
 ```
 prs/
 ├── docker-compose.yml
-├── .env                    # credentials (git ignored)
+├── .env                        # credentials (git ignored)
 ├── README.md
-├── CLAUDE.md               # สารบัญสำหรับ AI agent
-├── app/                    # Frontend
+├── CLAUDE.md                   # สารบัญสำหรับ AI agent
+├── app/                        # Frontend
 │   ├── src/
-│   │   ├── App.tsx         # Components ทั้งหมด
-│   │   ├── data.ts         # Types
-│   │   ├── lib/api.ts      # API client
+│   │   ├── App.tsx             # Components ทั้งหมด
+│   │   ├── data.ts             # Types
+│   │   ├── lib/api.ts          # API client
 │   │   └── index.css
 │   ├── public/
 │   │   └── favicon.png
 │   └── package.json
-└── backend/                # Backend
+└── backend/                    # Backend
     ├── src/
-    │   ├── index.ts        # Hono server
-    │   ├── routes/         # auth, requests, users, audit, files, settings
-    │   ├── middleware/      # JWT auth
-    │   └── lib/            # prisma, jwt
+    │   ├── index.ts            # Hono server entry
+    │   ├── routes/             # auth, requests, users, audit, files, settings
+    │   ├── middleware/         # JWT auth + requireRole
+    │   └── lib/                # prisma client, jwt utils
     ├── prisma/
     │   └── schema.prisma
-    ├── uploads/            # ไฟล์ที่ผู้ใช้อัปโหลด
+    ├── uploads/                # ไฟล์ที่ผู้ใช้อัปโหลด (git ignored)
     └── Dockerfile
 ```
