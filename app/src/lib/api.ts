@@ -28,7 +28,9 @@ export const api = {
   },
   requests: {
     list: () => req<any[]>('GET', '/api/requests'),
+    listAll: () => req<any[]>('GET', '/api/requests/all'),
     create: (data: unknown) => req<any>('POST', '/api/requests', data),
+    update: (id: string, data: unknown) => req<any>('PUT', `/api/requests/${id}`, data),
     updateStatus: (id: string, data: unknown) =>
       req<any>('PATCH', `/api/requests/${id}/status`, data),
   },
@@ -47,9 +49,9 @@ export const api = {
   },
   settings: {
     get: () => req<any>('GET', '/api/settings'),
-    update: (data: { siteName?: string; siteSubtitle?: string; logoUrl?: string | null }) =>
-      req<any>('PUT', '/api/settings', data),
+    update: (data: object) => req<any>('PUT', '/api/settings', data),
     testEmail: () => req<{ ok: boolean; sentTo: string }>('POST', '/api/settings/test-email', {}),
+    testDiscord: (webhook?: string) => req<{ ok: boolean }>('POST', '/api/settings/test-discord', { webhook }),
   },
   files: {
     upload: async (file: File): Promise<{ url: string; name: string }> => {

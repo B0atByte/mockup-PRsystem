@@ -29,18 +29,22 @@ export interface PurchaseRequest {
   dueDate: string;
   contactName: string;
   signedDate: string;
-  status: 'pending' | 'purchasing' | 'accounting' | 'transferred' | 'rejected';
+  status: 'pending' | 'purchasing' | 'accounting' | 'transferred' | 'received' | 'rejected';
   createdBy: string;
   createdByName: string;
   createdAt: string;
   updatedAt: string;
   prNo?: string;
   poNo?: string;
+  requestFile?: string;
   prFile?: string;
   poFile?: string;
   transferRef?: string;
   transferDate?: string;
   transferFile?: string;
+  deliveryNote?: string;
+  taxInvoice?: string;
+  receivedAt?: string;
   notes?: string;
 }
 
@@ -84,7 +88,8 @@ export const STATUS_LABELS: Record<string, string> = {
   pending: 'รอฝ่ายจัดซื้อ',
   purchasing: 'รอฝ่ายบัญชี',
   accounting: 'รอโอนเงิน',
-  transferred: 'โอนเงินแล้ว',
+  transferred: 'รอรับสินค้า',
+  received: 'รับสินค้าแล้ว',
   rejected: 'ปฏิเสธ',
 };
 
@@ -92,11 +97,12 @@ export const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700 border border-amber-200',
   purchasing: 'bg-blue-100 text-blue-700 border border-blue-200',
   accounting: 'bg-purple-100 text-purple-700 border border-purple-200',
-  transferred: 'bg-green-100 text-green-700 border border-green-200',
+  transferred: 'bg-orange-100 text-orange-700 border border-orange-200',
+  received: 'bg-green-100 text-green-700 border border-green-200',
   rejected: 'bg-red-100 text-red-700 border border-red-200',
 };
 
-export const CATEGORIES = ['ผัก', 'เนื้อ', 'หมู', 'ไก่', 'ซอส', 'เครื่องดื่ม', 'เบ็ดเตล็ด'];
+export const CATEGORIES = ['ผัก', 'เนื้อ หมู ไก่', 'ซอส', 'เครื่องดื่ม', 'อื่นๆ'];
 
 
 export const INITIAL_REQUESTS: PurchaseRequest[] = [

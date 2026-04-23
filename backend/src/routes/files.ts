@@ -9,6 +9,10 @@ const router = new Hono()
 const UPLOAD_DIR = path.resolve('./uploads')
 if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true })
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.xlsx', '.xls', '.docx', '.doc'])
+
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
   '.png': 'image/png',
@@ -31,25 +35,37 @@ router.post('/', authMiddleware, async (c) => {
     return c.json({ error: 'ไม่พบไฟล์' }, 400)
   }
 
+  if (file.size > MAX_FILE_SIZE) {
+    return c.json({ error: `ไฟล์ขนาดใหญ่เกินไป (สูงสุด ${MAX_FILE_SIZE / 1024 / 1024}MB)` }, 400)
+  }
+
   const ext = path.extname(file.name).toLowerCase()
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return c.json({ error: `ประเภทไฟล์ไม่รองรับ (รองรับ: ${[...ALLOWED_EXTENSIONS].join(', ')})` }, 400)
+  }
+
   const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`
   await writeFile(path.join(UPLOAD_DIR, safeName), Buffer.from(await file.arrayBuffer()))
 
   return c.json({ url: `/api/files/${safeName}`, name: file.name })
 })
 
-// GET /api/files/:filename — เสิร์ฟไฟล์ (public — filename เป็น random UUID)
+// GET /api/files/:filename — เสิร์ฟไฟล์
 router.get('/:filename', async (c) => {
   const { filename } = c.req.param()
 
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\') || path.isAbsolute(filename)) {
+    return c.json({ error: 'Invalid filename' }, 400)
+  }
+
+  const ext = path.extname(filename).toLowerCase()
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
     return c.json({ error: 'Invalid filename' }, 400)
   }
 
   const filePath = path.join(UPLOAD_DIR, filename)
   try {
     const data = await readFile(filePath)
-    const ext = path.extname(filename).toLowerCase()
     const mime = MIME[ext] || 'application/octet-stream'
     return new Response(data, {
       headers: {

@@ -1,17 +1,22 @@
 import { Hono } from 'hono'
+import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma.js'
 import { signToken } from '../lib/jwt.js'
 import { authMiddleware } from '../middleware/auth.js'
+import { parseBody } from '../lib/validate.js'
 
 const auth = new Hono()
 
-auth.post('/login', async (c) => {
-  const { username, password } = await c.req.json()
+const loginSchema = z.object({
+  username: z.string().min(1, 'กรุณากรอก username'),
+  password: z.string().min(1, 'กรุณากรอก password'),
+})
 
-  if (!username || !password) {
-    return c.json({ error: 'กรุณากรอก username และ password' }, 400)
-  }
+auth.post('/login', async (c) => {
+  const result = await parseBody(c, loginSchema)
+  if (!(result as any).data) return result as unknown as Response
+  const { username, password } = (result as any).data
 
   const user = await prisma.user.findUnique({ where: { username } })
   if (!user || !user.active) {

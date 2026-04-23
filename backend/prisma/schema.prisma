@@ -54,11 +54,15 @@ model PurchaseRequest {
   notes         String?       @db.Text
   prNo          String?
   poNo          String?
+  requestFile   String?   @db.Text
   prFile        String?   @db.Text
   poFile        String?   @db.Text
   transferRef   String?
   transferDate  String?
   transferFile  String?   @db.Text
+  deliveryNote  String?   @db.Text
+  taxInvoice    String?   @db.Text
+  receivedAt    String?
   createdBy     String
   createdByName String
   createdAt     DateTime      @default(now())
@@ -86,6 +90,7 @@ enum RequestStatus {
   purchasing
   accounting
   transferred
+  received
   rejected
 }
 
@@ -105,13 +110,21 @@ model PurchaseItem {
 }
 
 model Settings {
-  id        String   @id @default("singleton")
-  siteName  String   @default("Casa Lapin")
-  siteSubtitle String @default("ระบบขอซื้อสินค้า")
-  logoUrl   String?  @db.Text
-  updatedAt DateTime @updatedAt
-  updatedBy String?
+  id           String   @id @default("singleton")
+  siteName     String   @default("Casa Lapin")
+  siteSubtitle String   @default("ระบบขอซื้อสินค้า")
+  logoUrl      String?  @db.Text
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
   updatedByName String?
+
+  discordWebhook        String?  @db.Text
+  discordOnNewRequest   Boolean  @default(true)
+  discordOnPurchasing   Boolean  @default(true)
+  discordOnAccounting   Boolean  @default(true)
+  discordOnTransferred  Boolean  @default(true)
+  discordOnRejected     Boolean  @default(true)
+  discordOnReceived     Boolean  @default(true)
 
   @@map("settings")
 }

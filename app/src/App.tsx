@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import casaLapinLogo from './assets/casa_lapin_logo.png';
 import {
   LayoutDashboard, FileText, CreditCard, Users, LogOut,
   Bell, Search, X, ChevronRight, Plus, Trash2, Edit2, Eye,
   CheckCircle, XCircle, Clock, DollarSign, AlertCircle,
   Upload, Moon, Sun, ChevronDown, Activity,
   Shield, KeyRound, UserPlus, BarChart2,
-  FileCheck, Send, Banknote, History, RefreshCw, Menu, Package
+  FileCheck, Send, Banknote, History, RefreshCw, Menu, Package,
+  Download, Printer, Filter, CalendarDays, MessageSquare
 } from 'lucide-react';
 import {
   ROLE_LABELS, ROLE_COLORS, STATUS_LABELS, STATUS_COLORS, CATEGORIES,
@@ -23,9 +23,14 @@ type Page =
   | 'pending-approval' | 'issue-pr-po' | 'forward-accounting'
   | 'payment-list' | 'record-payment' | 'payment-history'
   | 'user-management' | 'add-user' | 'audit-log'
-  | 'all-requests' | 'reports' | 'tracking' | 'site-settings';
+  | 'all-requests' | 'reports' | 'tracking' | 'site-settings' | 'discord-settings';
 
-interface SiteSettings { siteName: string; siteSubtitle: string; logoUrl?: string | null; updatedByName?: string; updatedAt?: string; }
+interface SiteSettings {
+  siteName: string; siteSubtitle: string; logoUrl?: string | null; updatedByName?: string; updatedAt?: string;
+  discordWebhook?: string | null;
+  discordOnNewRequest?: boolean; discordOnPurchasing?: boolean; discordOnAccounting?: boolean;
+  discordOnTransferred?: boolean; discordOnRejected?: boolean; discordOnReceived?: boolean;
+}
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const fmt = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 0 });
@@ -299,6 +304,60 @@ function FileUploadField({ label, fileName, onFile, onError }: {
   );
 }
 
+// ─── PDF Print ───────────────────────────────────────────────────────────────
+const PM_LABELS: Record<string, string> = { bank: 'โอนเงิน', cash: 'เงินสด', transfer: 'โอนเงิน' };
+const PT_LABELS: Record<string, string> = { before: 'ก่อนส่งของ', after: 'หลังส่งของ' };
+
+function printRequest(req: PurchaseRequest) {
+  const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+  <title>ใบขอซื้อ ${req.reqNo}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Sarabun','Tahoma',sans-serif;font-size:13px;color:#222;padding:24px;max-width:800px;margin:auto}
+    h1{font-size:20px;text-align:center;margin-bottom:4px}
+    .sub{text-align:center;color:#555;margin-bottom:20px;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin-top:16px}
+    th{background:#f3f4f6;text-align:left;padding:7px 10px;font-size:11px;border:1px solid #ddd}
+    td{padding:7px 10px;border:1px solid #e5e7eb;font-size:12px;vertical-align:top}
+    .label{color:#6b7280;font-size:11px;margin-bottom:2px}
+    .val{font-size:13px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+    .box{border:1px solid #e5e7eb;border-radius:8px;padding:12px}
+    .total{font-size:18px;font-weight:bold;color:#1d4ed8;text-align:right;margin-top:16px}
+    .sig{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:40px}
+    .sig-box{text-align:center;border-top:1px solid #888;padding-top:8px;font-size:11px;color:#555;margin-top:40px}
+    @media print{body{padding:10mm}}
+  </style></head><body>
+  <h1>ใบขอซื้อสินค้า</h1>
+  <div class="sub">${req.reqNo} · วันที่: ${req.createdAt} · สถานะ: ${STATUS_LABELS[req.status] || req.status}</div>
+  <div class="grid">
+    <div class="box"><div class="label">รายการ</div><div class="val">${req.title}</div></div>
+    <div class="box"><div class="label">ผู้ขอซื้อ</div><div class="val">${req.createdByName}</div></div>
+    <div class="box"><div class="label">หมวดหมู่</div><div class="val">${req.category || '—'}</div></div>
+    <div class="box"><div class="label">ร้านค้า / ผู้ขาย</div><div class="val">${req.supplierName || '—'}${req.supplierName2 ? ' / ' + req.supplierName2 : ''}</div></div>
+    <div class="box"><div class="label">วิธีชำระเงิน</div><div class="val">${PM_LABELS[req.paymentMethod] || req.paymentMethod} (${PT_LABELS[req.paymentTiming] || req.paymentTiming})</div></div>
+    <div class="box"><div class="label">กำหนดชำระ</div><div class="val">${req.dueDate || '—'}</div></div>
+    ${req.reason ? `<div class="box" style="grid-column:1/-1"><div class="label">เหตุผล / หมายเหตุ</div><div class="val">${req.reason}</div></div>` : ''}
+  </div>
+  ${req.items && req.items.length > 0 ? `
+  <table style="margin-top:20px">
+    <thead><tr><th>รหัส</th><th>รายการ</th><th>จำนวน</th><th>หน่วย</th><th style="text-align:right">ราคา/หน่วย</th><th style="text-align:right">รวม</th></tr></thead>
+    <tbody>${req.items.map(it => `<tr><td>${it.code || '—'}</td><td>${it.name}</td><td>${it.qty}</td><td>${it.unit}</td><td style="text-align:right">฿${it.price.toLocaleString()}</td><td style="text-align:right">฿${(it.qty * it.price).toLocaleString()}</td></tr>`).join('')}</tbody>
+  </table>` : ''}
+  <div class="total">ยอดรวมทั้งสิ้น: ฿${req.totalAmount.toLocaleString('th-TH')}</div>
+  ${req.prNo ? `<div style="margin-top:12px;font-size:12px;color:#555">PR: ${req.prNo} &nbsp;|&nbsp; PO: ${req.poNo || '—'}</div>` : ''}
+  ${req.transferRef ? `<div style="font-size:12px;color:#555;margin-top:4px">Ref โอนเงิน: ${req.transferRef} (${req.transferDate || ''})</div>` : ''}
+  <div class="sig">
+    <div><div style="height:50px"></div><div class="sig-box">ผู้ขอซื้อ / ${req.createdByName}</div></div>
+    <div><div style="height:50px"></div><div class="sig-box">ฝ่ายจัดซื้อ</div></div>
+    <div><div style="height:50px"></div><div class="sig-box">ผู้อนุมัติ</div></div>
+  </div>
+  <script>window.onload=()=>{window.print();}</script>
+  </body></html>`;
+  const w = window.open('', '_blank', 'width=850,height=700');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 // ─── File View Button ────────────────────────────────────────────────────────
 type FileMeta = { url: string; by?: string; byRole?: string; at?: string }
 
@@ -317,26 +376,24 @@ function FileButton({ label, raw }: { label: string; raw: string }) {
     setLoading(true);
     try { await api.files.open(meta.url); } catch { /* ignore */ } finally { setLoading(false); }
   };
-  const roleLabel: Record<string, string> = {
-    purchasing: 'ฝ่ายจัดซื้อ', accounting: 'ฝ่ายบัญชี',
-    owner: 'ผู้ประกอบการ', employee: 'พนักงาน', itsupport: 'IT Support',
-  };
+  const fileName = meta.url.split('/').pop() || '';
+  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toUpperCase() : 'FILE';
   const atStr = meta.at ? new Date(meta.at).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '';
   return (
-    <div className="flex flex-col gap-1">
-      <button onClick={open} disabled={!canView || loading}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-fit">
-        {loading ? <RefreshCw size={12} className="animate-spin" /> : <FileCheck size={12} />}
-        {label}
-      </button>
-      {meta.by && (
-        <div className="text-[10px] text-slate-400 pl-1">
-          ดำเนินการโดย <span className="text-slate-600 dark:text-slate-300 font-medium">{meta.by}</span>
-          {meta.byRole && <span className="text-slate-400"> ({roleLabel[meta.byRole] || meta.byRole})</span>}
-          {atStr && <span> · {atStr}</span>}
+    <button onClick={open} disabled={!canView || loading}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 hover:shadow-sm transition-all w-full text-left group disabled:opacity-50 disabled:cursor-not-allowed">
+      <div className="w-7 h-7 rounded-md bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+        {loading ? <RefreshCw size={11} className="animate-spin text-slate-400" /> : <FileCheck size={11} className="text-slate-500 dark:text-slate-400" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+          {label}
+          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-1 rounded">{ext}</span>
         </div>
-      )}
-    </div>
+        {meta.by && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{meta.by}{atStr ? ` · ${atStr}` : ''}</div>}
+      </div>
+      <ChevronRight size={12} className="text-slate-300 dark:text-slate-600 group-hover:text-slate-500 transition-colors shrink-0" />
+    </button>
   );
 }
 
@@ -387,7 +444,7 @@ function LoginPage({ onLogin, siteSettings }: { onLogin: (u: User) => void; site
       </div>
       <div className="w-full max-w-[420px]">
         <div className="text-center mb-7">
-          <img src={siteSettings.logoUrl || casaLapinLogo} alt="logo" className="w-20 h-20 object-contain mx-auto mb-4 drop-shadow-md rounded-xl" />
+          {siteSettings.logoUrl && <img src={siteSettings.logoUrl} alt="logo" className="w-20 h-20 object-contain mx-auto mb-4 drop-shadow-md rounded-xl" />}
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white tracking-tight">{siteSettings.siteName}</h1>
           <p className="text-slate-400 text-sm mt-1">{siteSettings.siteSubtitle}</p>
         </div>
@@ -450,6 +507,7 @@ const MENU: MenuItem[] = [
   { id: 'add-user', label: 'เพิ่มผู้ใช้ใหม่', icon: UserPlus, roles: ['itsupport'] },
   { id: 'audit-log', label: 'Audit Log', icon: Activity, roles: ['itsupport'] },
   { id: 'site-settings', label: 'ตั้งค่าเว็บไซต์', icon: Shield, roles: ['itsupport'] },
+  { id: 'discord-settings', label: 'Discord แจ้งเตือน', icon: MessageSquare, roles: ['itsupport'] },
 ];
 
 function Sidebar({ user, page, setPage, collapsed, dark, toggleDark, mobileOpen, setMobileOpen, siteSettings }: {
@@ -460,7 +518,7 @@ function Sidebar({ user, page, setPage, collapsed, dark, toggleDark, mobileOpen,
     <aside className={`fixed md:relative z-40 h-screen flex flex-col bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 transition-transform md:transition-all duration-200 shrink-0 w-64 ${collapsed ? 'md:w-14' : 'md:w-56'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
       {/* Logo */}
       <div className={`flex items-center gap-3 px-3 py-4 border-b border-slate-100 dark:border-slate-800 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <img src={siteSettings.logoUrl || casaLapinLogo} alt="logo" className="w-8 h-8 object-contain shrink-0 rounded" />
+        {siteSettings.logoUrl && <img src={siteSettings.logoUrl} alt="logo" className="w-8 h-8 object-contain shrink-0 rounded" />}
         {!collapsed && (
           <div className="min-w-0">
             <div className="text-sm font-bold text-slate-800 dark:text-white leading-tight truncate">{siteSettings.siteName}</div>
@@ -524,6 +582,7 @@ function Topbar({ page, user, requests, onLogout, collapsed, setCollapsed, mobil
     dashboard: 'แดชบอร์ด', 'my-requests': 'คำขอของฉัน', 'create-request': 'สร้างใบขอซื้อ',
     'pending-approval': 'รายการรออนุมัติ', 'issue-pr-po': 'ออก PR / PO', 'forward-accounting': 'ส่งต่อบัญชี',
     'payment-list': 'รายการรอโอนเงิน', 'record-payment': 'บันทึกการโอนเงิน', 'payment-history': 'ประวัติการโอน',
+    'discord-settings': 'Discord แจ้งเตือน',
     'user-management': 'จัดการผู้ใช้', 'add-user': 'เพิ่มผู้ใช้ใหม่', 'audit-log': 'Audit Log',
     'all-requests': 'คำขอทั้งหมด', reports: 'รายงานสรุป', tracking: 'ติดตามสถานะคำขอ',
   };
@@ -659,7 +718,228 @@ function DashboardPage({ requests }: { requests: PurchaseRequest[] }) {
   );
 }
 
-function MyRequestsPage({ requests, user, onView }: { requests: PurchaseRequest[]; user: User; onView: (r: PurchaseRequest) => void }) {
+function EditRequestModal({ req, onClose, onSaved, toast }: {
+  req: PurchaseRequest; onClose: () => void;
+  onSaved: (r: PurchaseRequest) => void; toast: (m: string, t?: Toast['type']) => void;
+}) {
+  const parseFile = (raw?: string) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const existingFile = parseFile(req.requestFile);
+
+  const [categories] = useState<string[]>(req.categories || []);
+  const [supplierName] = useState(req.supplierName);
+  const [supplierName2] = useState(req.supplierName2 || '');
+  const [items] = useState(req.items.map(i => ({ code: i.code, name: i.name, qty: i.qty, unit: i.unit, price: i.price, itemNote: i.itemNote })));
+  const [paymentMethod, setPaymentMethod] = useState(req.paymentMethod);
+  const [paymentTiming, setPaymentTiming] = useState(req.paymentTiming);
+  const [orderDate, setOrderDate] = useState(req.orderDate);
+  const [deliveryDate, setDeliveryDate] = useState(req.deliveryDate || '');
+  const [dueDate, setDueDate] = useState(req.dueDate || '');
+  const [notes, setNotes] = useState(req.reason || '');
+  const [contactName, setContactName] = useState(req.contactName);
+  const [signedDate, setSignedDate] = useState(req.signedDate);
+  const [reqFileName, setReqFileName] = useState(existingFile?.url ? 'ไฟล์เดิม' : '');
+  const [reqFileUrl, setReqFileUrl] = useState(existingFile?.url || '');
+  const [saving, setSaving] = useState(false);
+
+  const total = items.reduce((s, i) => s + i.qty * i.price, 0);
+  // const updateItem = (i: number, f: string, v: string | number) =>
+  //   setItems(p => p.map((x, idx) => idx === i ? { ...x, [f]: v } : x));
+
+  const handleSave = async () => {
+    // if (categories.length === 0) return toast('กรุณาเลือกประเภทสินค้าอย่างน้อย 1 ประเภท', 'error');
+    // if (!supplierName.trim()) return toast('กรุณากรอกชื่อ Supplier', 'error');
+    // if (items.some(i => !i.name.trim())) return toast('กรุณากรอกชื่อสินค้าทุกรายการ', 'error');
+    // if (total <= 0) return toast('ยอดรวมต้องมากกว่า 0', 'error');
+    if (!reqFileUrl) return toast('กรุณาแนบใบขอสั่งซื้อ', 'error');
+    if (!paymentMethod) return toast('กรุณาเลือกช่องทางการชำระเงิน', 'error');
+    if (!paymentTiming) return toast('กรุณาเลือกกำหนดจ่าย', 'error');
+    setSaving(true);
+    try {
+      const updated = await api.requests.update(req.id, {
+        title: `สั่งซื้อ${categories.join('/')} - ${supplierName}`,
+        category: categories[0] || '', categories, supplierName, supplierName2,
+        items, totalAmount: total, reason: notes,
+        paymentMethod, paymentTiming,
+        orderDate, deliveryDate, dueDate, contactName, signedDate,
+        requestFile: reqFileUrl || undefined,
+      });
+      onSaved(updated);
+      toast('แก้ไขใบขอซื้อสำเร็จ');
+      onClose();
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open title={`แก้ไขใบขอซื้อ ${req.reqNo}`} onClose={onClose} footer={
+      <div className="flex gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+          <CheckCircle size={15} />{saving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+        </button>
+        <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
+      </div>
+    }>
+      <div className="flex flex-col gap-4 max-h-[65vh] overflow-y-auto pr-1">
+        {/* ปิดการใช้งานชั่วคราว
+        <div>
+          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">ประเภทสินค้า *</div>
+          <CheckboxGroup options={CATEGORIES} selected={categories} onChange={setCategories} />
+        </div>
+        <Input label="ชื่อ (Supplier Name) *" value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="ชื่อผู้จำหน่าย" />
+        <Input label="Supplier 2 (ถ้ามี)" value={supplierName2} onChange={e => setSupplierName2(e.target.value)} placeholder="" />
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">รายการสินค้า *</div>
+            <button onClick={() => setItems(p => [...p, { code: '', name: '', qty: 1, unit: 'หน่วย', price: 0, itemNote: '' }])}
+              className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"><Plus size={12} />เพิ่มรายการ</button>
+          </div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="grid bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-400 uppercase"
+              style={{ gridTemplateColumns: '70px 1fr 60px 70px 90px 1fr 32px' }}>
+              {['Code', 'รายการ', 'จำนวน', 'หน่วย', 'ราคา', 'หมายเหตุ', ''].map((h, i) => (
+                <div key={i} className={`px-2 py-2 ${i < 6 ? 'border-r border-slate-200 dark:border-slate-700' : ''}`}>{h}</div>
+              ))}
+            </div>
+            {items.map((item, i) => (
+              <div key={i} className="grid border-b border-slate-50 dark:border-slate-800/80 last:border-0"
+                style={{ gridTemplateColumns: '70px 1fr 60px 70px 90px 1fr 32px' }}>
+                {[
+                  <input value={item.code} onChange={e => updateItem(i, 'code', e.target.value)} placeholder="C..."
+                    className="w-full px-2 py-2 text-xs bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <input value={item.name} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="ชื่อสินค้า"
+                    className="w-full px-2 py-2 text-sm bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <input type="number" value={item.qty} onChange={e => updateItem(i, 'qty', +e.target.value)} min={1}
+                    className="w-full px-2 py-2 text-sm text-center bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <input value={item.unit} onChange={e => updateItem(i, 'unit', e.target.value)}
+                    className="w-full px-2 py-2 text-xs text-center bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <input type="number" value={item.price || ''} onChange={e => updateItem(i, 'price', +e.target.value)} placeholder="0"
+                    className="w-full px-2 py-2 text-sm text-right bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <input value={item.itemNote} onChange={e => updateItem(i, 'itemNote', e.target.value)} placeholder="-"
+                    className="w-full px-2 py-2 text-xs bg-transparent outline-none focus:bg-blue-50 dark:focus:bg-blue-900/20 border-r border-slate-100 dark:border-slate-800" />,
+                  <div className="flex items-center justify-center">
+                    {items.length > 1 && (
+                      <button onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                        className="w-6 h-6 flex items-center justify-center text-red-400 hover:text-red-600 rounded transition-colors">
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>,
+                ].map((cell, ci) => <div key={ci}>{cell}</div>)}
+              </div>
+            ))}
+            <div className="flex justify-end px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-xs font-bold text-slate-500">ยอดรวม: <span className="text-blue-600 text-sm">฿{fmt(total)}</span></span>
+            </div>
+          </div>
+        </div>
+        */}
+
+        <div className="pt-2">
+          <FileUploadField
+            label="แนบใบขอสั่งซื้อ (ต้องมีเท่านั้น) *"
+            fileName={reqFileName}
+            onFile={(name, url) => { setReqFileName(name); setReqFileUrl(url); }}
+            onError={msg => toast(msg, 'error')}
+          />
+          {existingFile?.url && !reqFileName.startsWith('ไฟล์') && (
+            <p className="text-xs text-slate-400 mt-1">ไฟล์เดิม: {existingFile.url.split('/').pop()}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">ช่องทางการชำระเงิน</div>
+            <RadioGroup options={[{ val: 'bank', label: 'บัญชีบริษัท' }, { val: 'cash', label: 'เงินสดย่อย' }, { val: 'transfer', label: 'สำรองจ่าย' }]} value={paymentMethod} onChange={v => setPaymentMethod(v as 'bank' | 'cash' | 'transfer' | '')} />
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">กำหนดจ่าย</div>
+            <RadioGroup options={[{ val: 'before', label: 'ก่อนรับสินค้า' }, { val: 'after', label: 'หลังรับสินค้า' }]} value={paymentTiming} onChange={v => setPaymentTiming(v as 'before' | 'after' | '')} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <Input label="วันที่สั่งซื้อ" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+          <Input label="วันที่รับสินค้า" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+          <Sel label="วันที่ต้องชำระ" value={dueDate} onChange={e => setDueDate(e.target.value)}>
+            <option value="">-- เลือกระยะเวลา --</option>
+            <option value="วันที่ 10">วันที่ 10 ของเดือน</option>
+            <option value="วันที่ 25">วันที่ 25 ของเดือน</option>
+          </Sel>
+        </div>
+
+        <Textarea label="หมายเหตุ" value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="ระบุหมายเหตุเพิ่มเติม..." />
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="ชื่อผู้ติดต่อ" value={contactName} onChange={e => setContactName(e.target.value)} />
+          <Input label="วันที่ลงชื่อ" type="date" value={signedDate} onChange={e => setSignedDate(e.target.value)} />
+        </div>
+
+      </div>
+    </Modal>
+  );
+}
+
+function ReceiveGoodsModal({ req, onClose, onSaved, toast }: {
+  req: PurchaseRequest; onClose: () => void;
+  onSaved: (r: PurchaseRequest) => void; toast: (m: string, t?: Toast['type']) => void;
+}) {
+  const [deliveryFile, setDeliveryFile] = useState('');
+  const [deliveryFileUrl, setDeliveryFileUrl] = useState('');
+  const [taxFile, setTaxFile] = useState('');
+  const [taxFileUrl, setTaxFileUrl] = useState('');
+  const [receivedAt, setReceivedAt] = useState(today());
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!deliveryFileUrl) return toast('กรุณาแนบใบส่งของ', 'error');
+    if (!taxFileUrl) return toast('กรุณาแนบใบกำกับภาษี', 'error');
+    setSaving(true);
+    try {
+      const updated = await api.requests.updateStatus(req.id, {
+        status: 'received',
+        deliveryNote: deliveryFileUrl,
+        taxInvoice: taxFileUrl,
+        receivedAt,
+        notes: notes || undefined,
+      });
+      onSaved(updated);
+      onClose();
+    } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open title={`กดรับสินค้า — ${req.reqNo}`} onClose={onClose} footer={
+      <div className="flex gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+          <CheckCircle size={15} />{saving ? 'กำลังบันทึก...' : 'ยืนยันรับสินค้า'}
+        </button>
+        <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
+      </div>
+    }>
+      <div className="space-y-4">
+        <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{req.title}</div>
+          <div className="text-xs text-slate-400 mt-0.5">{req.reqNo} · <span className="font-bold text-blue-600">฿{req.totalAmount.toLocaleString('th-TH')}</span></div>
+        </div>
+        <FileUploadField label="ใบส่งของ *" fileName={deliveryFile}
+          onFile={(name, url) => { setDeliveryFile(name); setDeliveryFileUrl(url); }}
+          onError={msg => toast(msg, 'error')} />
+        <FileUploadField label="ใบกำกับภาษี *" fileName={taxFile}
+          onFile={(name, url) => { setTaxFile(name); setTaxFileUrl(url); }}
+          onError={msg => toast(msg, 'error')} />
+        <Input label="วันที่รับสินค้า" type="date" value={receivedAt} onChange={e => setReceivedAt(e.target.value)} />
+        <Textarea label="หมายเหตุ" value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="หมายเหตุเพิ่มเติม..." />
+      </div>
+    </Modal>
+  );
+}
+
+function MyRequestsPage({ requests, user, onView, onEdit, onReceive }: { requests: PurchaseRequest[]; user: User; onView: (r: PurchaseRequest) => void; onEdit: (r: PurchaseRequest) => void; onReceive: (r: PurchaseRequest) => void }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const mine = requests.filter(r => r.createdBy === user.id)
@@ -689,7 +969,11 @@ function MyRequestsPage({ requests, user, onView }: { requests: PurchaseRequest[
                 <div className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{r.title}</div>
                 <div className="text-xs text-slate-400 mt-0.5">{r.createdAt} · <span className="font-semibold text-slate-600 dark:text-slate-300">฿{fmt(r.totalAmount)}</span></div>
               </div>
-              <button onClick={() => onView(r)} className="p-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors shrink-0"><Eye size={16} /></button>
+              <div className="flex items-center gap-1 shrink-0">
+                {r.status === 'pending' && <button onClick={() => onEdit(r)} className="p-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 transition-colors" title="แก้ไข"><Edit2 size={16} /></button>}
+                {r.status === 'transferred' && <button onClick={() => onReceive(r)} className="p-2 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 transition-colors" title="กดรับสินค้า"><Package size={16} /></button>}
+                <button onClick={() => onView(r)} className="p-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors" title="ดูรายละเอียด"><Eye size={16} /></button>
+              </div>
             </div>
           ))
         }
@@ -708,7 +992,11 @@ function MyRequestsPage({ requests, user, onView }: { requests: PurchaseRequest[
                   <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                   <td className="px-4 py-3 text-xs text-slate-400">{r.createdAt}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => onView(r)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors"><Eye size={14} /></button>
+                    <div className="flex items-center gap-1">
+                      {r.status === 'pending' && <button onClick={() => onEdit(r)} title="แก้ไข" className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-500 transition-colors"><Edit2 size={14} /></button>}
+                      {r.status === 'transferred' && <button onClick={() => onReceive(r)} title="กดรับสินค้า" className="p-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 transition-colors"><Package size={14} /></button>}
+                      <button onClick={() => onView(r)} title="ดูรายละเอียด" className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 transition-colors"><Eye size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -719,7 +1007,7 @@ function MyRequestsPage({ requests, user, onView }: { requests: PurchaseRequest[
   );
 }
 
-// ── Checkbox group (multi-select pills) ────────────────────────────────────
+/* ── Checkbox group — ชั่วคราว disabled (เปิดใช้เมื่อต้องการเลือกประเภท) ──
 function CheckboxGroup({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
   const toggle = (opt: string) => onChange(selected.includes(opt) ? selected.filter(x => x !== opt) : [...selected, opt]);
   return (
@@ -740,6 +1028,7 @@ function CheckboxGroup({ options, selected, onChange }: { options: string[]; sel
     </div>
   );
 }
+*/
 
 // ── Radio group ─────────────────────────────────────────────────────────────
 function RadioGroup({ options, value, onChange }: { options: { val: string; label: string }[]; value: string; onChange: (v: string) => void }) {
@@ -764,10 +1053,7 @@ function RadioGroup({ options, value, onChange }: { options: { val: string; labe
 
 // ── Create Request Page ──────────────────────────────────────────────────────
 function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Omit<PurchaseRequest, 'id' | 'reqNo' | 'createdAt' | 'updatedAt'>) => void; toast: (m: string, t?: Toast['type']) => void }) {
-  const [categories, setCategories] = useState<string[]>([]);
-  const [supplierName, setSupplierName] = useState('');
-  const [supplierName2, setSupplierName2] = useState('');
-  const [items, setItems] = useState([{ code: '', name: '', qty: 1, unit: 'กก.', price: 0, itemNote: '' }]);
+  const [totalAmount, setTotalAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentTiming, setPaymentTiming] = useState('');
   const [orderDate, setOrderDate] = useState(today());
@@ -776,31 +1062,29 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
   const [notes, setNotes] = useState('');
   const [contactName, setContactName] = useState(user.name);
   const [signedDate, setSignedDate] = useState(today());
-
-  const total = items.reduce((s, i) => s + i.qty * i.price, 0);
-  const updateItem = (i: number, f: string, v: string | number) =>
-    setItems(p => p.map((x, idx) => idx === i ? { ...x, [f]: v } : x));
+  const [reqFileName, setReqFileName] = useState('');
+  const [reqFileUrl, setReqFileUrl] = useState('');
 
   const handleReset = () => {
-    setCategories([]); setSupplierName(''); setSupplierName2('');
-    setItems([{ code: '', name: '', qty: 1, unit: 'กก.', price: 0, itemNote: '' }]);
+    setTotalAmount('');
     setPaymentMethod(''); setPaymentTiming('');
     setOrderDate(today()); setDeliveryDate(''); setDueDate('');
     setNotes(''); setContactName(user.name); setSignedDate(today());
+    setReqFileName(''); setReqFileUrl('');
   };
 
   const handleSubmit = () => {
-    if (categories.length === 0) return toast('กรุณาเลือกประเภทสินค้าอย่างน้อย 1 ประเภท', 'error');
-    if (!supplierName.trim()) return toast('กรุณากรอกชื่อ Supplier', 'error');
-    if (items.some(i => !i.name.trim())) return toast('กรุณากรอกชื่อสินค้าทุกรายการ', 'error');
-    if (total <= 0) return toast('ยอดรวมต้องมากกว่า 0', 'error');
+    if (!reqFileUrl) return toast('กรุณาแนบใบขอสั่งซื้อ', 'error');
+    if (!totalAmount || +totalAmount <= 0) return toast('กรุณากรอกยอดเงินทั้งหมด', 'error');
     if (!paymentMethod) return toast('กรุณาเลือกช่องทางการชำระเงิน', 'error');
+    if (!paymentTiming) return toast('กรุณาเลือกกำหนดจ่าย', 'error');
     onSave({
-      title: `สั่งซื้อ${categories.join('/')} - ${supplierName}`,
-      category: categories[0] || '', categories, supplierName, supplierName2,
-      items, totalAmount: total, reason: notes,
+      title: `ใบขอซื้อสินค้า ${orderDate}`,
+      category: '', categories: [], supplierName: '', supplierName2: '',
+      items: [], totalAmount: +totalAmount, reason: notes,
       paymentMethod: paymentMethod as any, paymentTiming: paymentTiming as any,
       orderDate, deliveryDate, dueDate, contactName, signedDate,
+      requestFile: reqFileUrl,
       status: 'pending', createdBy: user.id, createdByName: user.name, notes,
     });
     handleReset();
@@ -829,18 +1113,16 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
             </div>
           </div>
 
-          {/* ประเภท checkboxes */}
+          {/* ปิดการใช้งานชั่วคราว
           <div>
             <SLabel t="ประเภท : ผัก / เนื้อ หมู ไก่ / ซอส / เครื่องดื่ม / อื่นๆ *" />
             <CheckboxGroup options={CATEGORIES} selected={categories} onChange={setCategories} />
           </div>
 
-          {/* Supplier */}
           <div className="grid grid-cols-1 gap-4">
             <Input label="ชื่อ (Supplier Name) *" value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="ชื่อผู้จำหน่าย" />
           </div>
 
-          {/* ตารางรายการ */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <SLabel t="ตารางรายการสินค้า *" />
@@ -850,16 +1132,13 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
               </button>
             </div>
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900">
-              {/* Desktop: grid table */}
               <div className="hidden sm:block">
-                {/* Header */}
                 <div className="grid bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-400 uppercase tracking-wide"
                   style={{ gridTemplateColumns: '80px 1fr 64px 80px 100px 1fr 36px' }}>
                   {['Code', 'รายการ', 'จำนวน', 'หน่วย', 'ราคา', 'หมายเหตุ', ''].map((h, i) => (
                     <div key={i} className={`px-2 py-2 ${i < 6 ? 'border-r border-slate-200 dark:border-slate-700' : ''} ${i >= 2 && i <= 4 ? 'text-center' : ''}`}>{h}</div>
                   ))}
                 </div>
-                {/* Rows */}
                 <div className="divide-y divide-slate-50 dark:divide-slate-800/80">
                   {items.map((item, i) => (
                     <div key={i} className="grid items-stretch" style={{ gridTemplateColumns: '80px 1fr 64px 80px 100px 1fr 36px' }}>
@@ -892,7 +1171,6 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                 </div>
               </div>
 
-              {/* Mobile: card per item */}
               <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-800">
                 {items.map((item, i) => (
                   <div key={i} className="p-3 flex flex-col gap-2">
@@ -932,11 +1210,35 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
                 ))}
               </div>
 
-              {/* Total Footer */}
               <div className="flex justify-end items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
                 <span className="text-xs text-slate-500 font-bold">ยอดรวมทั้งสิ้น:</span>
                 <span className="text-lg font-bold text-blue-600">฿{fmt(total)}</span>
               </div>
+            </div>
+          </div>
+          */}
+
+          <div className="pt-2">
+            <FileUploadField
+              label="แนบใบขอสั่งซื้อ (ต้องมีเท่านั้น) *"
+              fileName={reqFileName}
+              onFile={(name, url) => { setReqFileName(name); setReqFileUrl(url); }}
+              onError={msg => toast(msg, 'error')}
+            />
+          </div>
+
+          {/* ยอดเงินทั้งหมด */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ยอดเงินทั้งหมด (บาท) *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">฿</span>
+              <input
+                type="number" min="0" step="0.01"
+                value={totalAmount}
+                onChange={e => setTotalAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
+              />
             </div>
           </div>
 
@@ -947,7 +1249,7 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
               <RadioGroup options={[
                 { val: 'bank', label: 'บัญชีบริษัท' },
                 { val: 'cash', label: 'เงินสดย่อย' },
-                { val: 'transfer', label: 'โอนหน้าร้าน' },
+                { val: 'transfer', label: 'สำรองจ่าย' },
               ]} value={paymentMethod} onChange={setPaymentMethod} />
             </div>
 
@@ -965,7 +1267,11 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
             <Input label="วันที่สั่งซื้อ *" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
             <Input label="วันที่จะรับสินค้า" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
-            <Input label="วันที่ต้องชำระ" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            <Sel label="วันที่ต้องชำระ" value={dueDate} onChange={e => setDueDate(e.target.value)}>
+              <option value="">-- เลือกระยะเวลา --</option>
+              <option value="วันที่ 10">วันที่ 10 ของเดือน</option>
+              <option value="วันที่ 25">วันที่ 25 ของเดือน</option>
+            </Sel>
           </div>
 
           {/* Notes */}
@@ -993,7 +1299,7 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
   );
 }
 
-function PendingApprovalPage({ requests, onIssuePRPO, onReject }: { requests: PurchaseRequest[]; onIssuePRPO: (r: PurchaseRequest) => void; onReject: (r: PurchaseRequest) => void }) {
+function PendingApprovalPage({ requests, onIssuePRPO, onReject, onView }: { requests: PurchaseRequest[]; onIssuePRPO: (r: PurchaseRequest) => void; onReject: (r: PurchaseRequest) => void; onView: (r: PurchaseRequest) => void }) {
   const [search, setSearch] = useState('');
   const pending = requests.filter(r => r.status === 'pending' && r.title.toLowerCase().includes(search.toLowerCase()));
 
@@ -1010,7 +1316,7 @@ function PendingApprovalPage({ requests, onIssuePRPO, onReject }: { requests: Pu
           {pending.map(r => (
             <div key={r.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
+                <button onClick={() => onView(r)} className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-xs font-mono text-slate-400">{r.reqNo}</span>
                     <StatusBadge status={r.status} />
@@ -1022,7 +1328,7 @@ function PendingApprovalPage({ requests, onIssuePRPO, onReject }: { requests: Pu
                     <span>·</span><span>{r.category}</span>
                   </div>
                   <div className="text-sm font-bold text-blue-600 mt-2">฿{fmt(r.totalAmount)}</div>
-                </div>
+                </button>
                 <div className="flex flex-col gap-2 shrink-0">
                   <button onClick={() => onIssuePRPO(r)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition-colors whitespace-nowrap">
                     <FileCheck size={13} />ออก PR/PO
@@ -1121,7 +1427,20 @@ function ForwardAccountingPage({ requests, onForward }: { requests: PurchaseRequ
 }
 
 function PaymentListPage({ requests, onRecord }: { requests: PurchaseRequest[]; onRecord: (r: PurchaseRequest) => void }) {
-  const waiting = requests.filter(r => r.status === 'accounting');
+  const today = new Date().toISOString().slice(0, 10);
+  const waiting = requests
+    .filter(r => r.status === 'accounting')
+    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+
+  const dueBadge = (due: string) => {
+    if (!due) return null;
+    if (due < today) return <span className="text-[10px] font-semibold text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-1.5 py-0.5 rounded-full">เกินกำหนด</span>;
+    if (due === today) return <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-1.5 py-0.5 rounded-full">ครบกำหนดวันนี้</span>;
+    const diff = Math.ceil((new Date(due).getTime() - new Date(today).getTime()) / 86400000);
+    if (diff <= 3) return <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-full">อีก {diff} วัน</span>;
+    return null;
+  };
+
   return (
     <div className="page-anim flex flex-col gap-4">
       {waiting.length === 0 ? (
@@ -1130,11 +1449,20 @@ function PaymentListPage({ requests, onRecord }: { requests: PurchaseRequest[]; 
           <p className="text-slate-400 text-sm">ไม่มีรายการรอโอนเงิน</p>
         </div>
       ) : waiting.map(r => (
-        <div key={r.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center justify-between gap-4">
+        <div key={r.id} className={`bg-white dark:bg-slate-900 rounded-2xl border p-5 flex items-center justify-between gap-4 ${r.dueDate && r.dueDate <= today ? 'border-red-200 dark:border-red-800' : 'border-slate-100 dark:border-slate-800'}`}>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-0.5"><span className="text-xs font-mono text-slate-400">{r.reqNo}</span><StatusBadge status={r.status} /></div>
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <span className="text-xs font-mono text-slate-400">{r.reqNo}</span>
+              <StatusBadge status={r.status} />
+              {r.dueDate && dueBadge(r.dueDate)}
+            </div>
             <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{r.title}</div>
-            <div className="text-xs text-slate-400 mt-1">PR: <span className="font-mono">{r.prNo}</span> · PO: <span className="font-mono">{r.poNo}</span></div>
+            <div className="text-xs text-slate-400 mt-1 space-x-2">
+              <span>PR: <span className="font-mono">{r.prNo}</span></span>
+              <span>·</span>
+              <span>PO: <span className="font-mono">{r.poNo}</span></span>
+              {r.dueDate && <><span>·</span><span className="flex items-center gap-1 inline-flex"><CalendarDays size={10} />กำหนด: <span className="font-medium text-slate-600 dark:text-slate-300">{r.dueDate}</span></span></>}
+            </div>
             <div className="text-sm font-bold text-blue-600 mt-1.5">฿{fmt(r.totalAmount)}</div>
           </div>
           <button onClick={() => onRecord(r)} className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-xl text-xs font-semibold hover:bg-green-700 transition-colors shrink-0">
@@ -1185,19 +1513,50 @@ function RecordPaymentPage({ requests, onTransfer, toast }: { requests: Purchase
 
 function PaymentHistoryPage({ requests }: { requests: PurchaseRequest[] }) {
   const [search, setSearch] = useState('');
-  const done = requests.filter(r => r.status === 'transferred' && (r.title.toLowerCase().includes(search.toLowerCase()) || (r.transferRef || '').includes(search)));
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const done = requests.filter(r => {
+    if (r.status !== 'transferred') return false;
+    if (search && !r.title.toLowerCase().includes(search.toLowerCase()) && !(r.transferRef || '').includes(search)) return false;
+    if (dateFrom && (r.transferDate || '') < dateFrom) return false;
+    if (dateTo && (r.transferDate || '') > dateTo) return false;
+    return true;
+  });
   const totalAmt = done.reduce((s, r) => s + r.totalAmount, 0);
+
+  const exportCSV = () => {
+    const headers = ['เลขที่', 'รายการ', 'จำนวนเงิน', 'Ref. โอน', 'วันที่โอน', 'ผู้ขอ'];
+    const rows = done.map(r => [r.reqNo, r.title, r.totalAmount, r.transferRef || '', r.transferDate || '', r.createdByName]);
+    const csv = [headers, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `payment-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="page-anim flex flex-col gap-4">
-      <div className="flex items-center gap-3 justify-between">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="max-w-xs flex-1"><SearchBar value={search} onChange={setSearch} /></div>
-        <div className="text-xs text-slate-500 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 px-3 py-2 rounded-xl">
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Filter size={12} />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20" />
+          <span>—</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20" />
+          {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-slate-400 hover:text-red-500"><X size={12} /></button>}
+        </div>
+        <div className="text-xs text-slate-500 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 px-3 py-1.5 rounded-xl">
           ยอดรวม: <span className="font-bold text-green-600">฿{fmt(totalAmt)}</span>
         </div>
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors">
+          <Download size={12} />Export CSV
+        </button>
       </div>
       <Card>
-        <Table headers={['เลขที่', 'รายการ', 'จำนวนเงิน', 'Ref. โอน', 'วันที่โอน', 'สถานะ']} rows={
+        <Table headers={['เลขที่', 'รายการ', 'จำนวนเงิน', 'Ref. โอน', 'วันที่โอน', 'ผู้ขอ']} rows={
           done.length === 0
             ? <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">ไม่พบข้อมูล</td></tr>
             : done.map(r => (
@@ -1207,7 +1566,7 @@ function PaymentHistoryPage({ requests }: { requests: PurchaseRequest[] }) {
                 <td className="px-4 py-3 text-sm font-semibold text-green-600">฿{fmt(r.totalAmount)}</td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-500">{r.transferRef || '-'}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{r.transferDate || '-'}</td>
-                <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                <td className="px-4 py-3 text-xs text-slate-500">{r.createdByName}</td>
               </tr>
             ))
         } />
@@ -1342,27 +1701,72 @@ function AddUserPage({ editUser, onSave }: { editUser?: User | null; onSave: (d:
 
 function AuditLogPage({ logs }: { logs: AuditLog[] }) {
   const [search, setSearch] = useState('');
-  const filtered = logs.filter(l => l.userName.includes(search) || l.action.includes(search) || l.detail.toLowerCase().includes(search.toLowerCase()));
+  const [filterAction, setFilterAction] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   const actionColor: Record<string, string> = {
     LOGIN: 'bg-blue-100 text-blue-700', CREATE: 'bg-green-100 text-green-700',
     UPDATE: 'bg-amber-100 text-amber-700', DELETE: 'bg-red-100 text-red-700',
     REJECT: 'bg-red-100 text-red-700', LOGOUT: 'bg-slate-100 text-slate-500',
   };
+  const actions = ['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'REJECT'];
+
+  const filtered = logs.filter(l => {
+    const dateStr = l.timestamp?.slice(0, 10) || '';
+    if (search && !l.userName.includes(search) && !l.action.includes(search) && !l.detail.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterAction && l.action !== filterAction) return false;
+    if (dateFrom && dateStr < dateFrom) return false;
+    if (dateTo && dateStr > dateTo) return false;
+    return true;
+  });
+
+  const exportCSV = () => {
+    const headers = ['เวลา', 'ผู้ใช้', 'Action', 'Module', 'รายละเอียด', 'IP'];
+    const rows = filtered.map(l => [l.timestamp, l.userName, l.action, l.module, l.detail, l.ip || '']);
+    const csv = [headers, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="page-anim flex flex-col gap-4">
-      <div className="max-w-sm"><SearchBar value={search} onChange={setSearch} placeholder="ค้นหาใน audit log..." /></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="max-w-xs flex-1"><SearchBar value={search} onChange={setSearch} placeholder="ค้นหาใน audit log..." /></div>
+        <select value={filterAction} onChange={e => setFilterAction(e.target.value)}
+          className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20">
+          <option value="">ทุก Action</option>
+          {actions.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Filter size={12} />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20" />
+          <span>—</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20" />
+          {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-slate-400 hover:text-red-500"><X size={12} /></button>}
+        </div>
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors">
+          <Download size={12} />Export CSV
+        </button>
+      </div>
+      <div className="text-xs text-slate-400 pl-1">แสดง {filtered.length} รายการ</div>
       <Card>
         <Table headers={['เวลา', 'ผู้ใช้', 'Action', 'Module', 'รายละเอียด', 'IP']} rows={
-          filtered.map(l => (
-            <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-              <td className="px-4 py-3 text-[11px] font-mono text-slate-400 whitespace-nowrap">{l.timestamp}</td>
-              <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{l.userName}</td>
-              <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${actionColor[l.action] || 'bg-slate-100 text-slate-600'}`}>{l.action}</span></td>
-              <td className="px-4 py-3 text-xs text-slate-500">{l.module}</td>
-              <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">{l.detail}</td>
-              <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{l.ip}</td>
-            </tr>
-          ))
+          filtered.length === 0
+            ? <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">ไม่พบข้อมูล</td></tr>
+            : filtered.map(l => (
+              <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <td className="px-4 py-3 text-[11px] font-mono text-slate-400 whitespace-nowrap">{l.timestamp}</td>
+                <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{l.userName}</td>
+                <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${actionColor[l.action] || 'bg-slate-100 text-slate-600'}`}>{l.action}</span></td>
+                <td className="px-4 py-3 text-xs text-slate-500">{l.module}</td>
+                <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">{l.detail}</td>
+                <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{l.ip}</td>
+              </tr>
+            ))
         } />
       </Card>
     </div>
@@ -1371,12 +1775,26 @@ function AuditLogPage({ logs }: { logs: AuditLog[] }) {
 
 function ReportsPage({ requests }: { requests: PurchaseRequest[] }) {
   const total = requests.reduce((s, r) => s + r.totalAmount, 0);
+
+  const exportCSV = () => {
+    const headers = ['เลขที่', 'รายการ', 'หมวด', 'จำนวนเงิน', 'สถานะ', 'วันที่สร้าง', 'ผู้ขอ', 'วิธีชำระ'];
+    const rows = requests.map(r => [r.reqNo, r.title, r.category, r.totalAmount, STATUS_LABELS[r.status] || r.status, r.createdAt, r.createdByName, r.paymentMethod]);
+    const csv = [headers, ...rows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `purchase-report-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
   const transferred = requests.filter(r => r.status === 'transferred').reduce((s, r) => s + r.totalAmount, 0);
   const inProgress = requests.filter(r => r.status !== 'transferred' && r.status !== 'rejected').reduce((s, r) => s + r.totalAmount, 0);
   const catData = CATEGORIES.map(cat => ({ label: cat, value: requests.filter(r => r.category === cat).reduce((s, r) => s + r.totalAmount, 0) })).filter(d => d.value > 0);
 
   return (
     <div className="page-anim flex flex-col gap-5">
+      <div className="flex justify-end">
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors">
+          <Download size={13} />Export CSV
+        </button>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="งบประมาณรวมทั้งหมด" value={`฿${fmt(total)}`} icon={DollarSign} color="bg-blue-100 dark:bg-blue-900/30 text-blue-600" />
         <StatCard label="โอนเงินสำเร็จ" value={`฿${fmt(transferred)}`} icon={CheckCircle} color="bg-green-100 dark:bg-green-900/30 text-green-600" />
@@ -1435,12 +1853,10 @@ function TrackingPage({ requests, user, onView }: {
 
   const getSteps = (r: PurchaseRequest): { label: string; sub: string; state: StepState }[] => {
     const s = r.status;
+    const done2 = ['accounting', 'transferred', 'received'].includes(s);
+    const done3 = ['transferred', 'received'].includes(s);
     return [
-      {
-        label: 'สร้างคำขอ',
-        sub: r.createdAt,
-        state: 'done',
-      },
+      { label: 'สร้างคำขอ', sub: r.createdAt, state: 'done' },
       {
         label: 'ฝ่ายจัดซื้อ',
         sub: s === 'pending' ? 'รอดำเนินการ' : s === 'rejected' ? 'ปฏิเสธแล้ว' : r.updatedAt,
@@ -1448,27 +1864,30 @@ function TrackingPage({ requests, user, onView }: {
       },
       {
         label: 'ออก PR/PO',
-        sub: ['accounting', 'transferred'].includes(s) ? (r.prNo || r.updatedAt) : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
+        sub: done2 ? (r.prNo || r.updatedAt) : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
         state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : 'done',
       },
       {
         label: 'โอนเงิน',
-        sub: s === 'transferred' ? (r.transferDate || r.updatedAt) : s === 'accounting' ? 'รอโอนเงิน' : '—',
-        state: s === 'transferred' ? 'done' : s === 'accounting' ? 'current' : 'pending',
+        sub: done3 ? (r.transferDate || r.updatedAt) : s === 'accounting' ? 'รอโอนเงิน' : '—',
+        state: done3 ? 'done' : s === 'accounting' ? 'current' : 'pending',
+      },
+      {
+        label: 'รับสินค้า',
+        sub: s === 'received' ? (r.receivedAt || r.updatedAt) : s === 'transferred' ? 'รอรับสินค้า' : '—',
+        state: s === 'received' ? 'done' : s === 'transferred' ? 'current' : 'pending',
       },
     ];
   };
 
   const lineColor = (state: StepState) =>
-    state === 'done' ? 'bg-green-400' :
-      state === 'rejected' ? 'bg-red-300 dark:bg-red-800' :
-        'bg-slate-200 dark:bg-slate-700';
+    state === 'done' ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700';
 
   const circleClass = (state: StepState) =>
     state === 'done' ? 'bg-green-500 border-green-500' :
       state === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
         state === 'rejected' ? 'bg-red-500 border-red-500' :
-          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+          'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
 
   const labelClass = (state: StepState) =>
     state === 'done' ? 'text-green-600 dark:text-green-400' :
@@ -1484,7 +1903,7 @@ function TrackingPage({ requests, user, onView }: {
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  const allCounts = (['pending', 'purchasing', 'accounting', 'transferred', 'rejected'] as const).map(k => ({
+  const allCounts = (['pending', 'purchasing', 'accounting', 'transferred', 'received', 'rejected'] as const).map(k => ({
     key: k,
     count: requests.filter(r => (user.role === 'employee' ? r.createdBy === user.id : true) && r.status === k).length,
   })).filter(s => s.count > 0);
@@ -1556,7 +1975,7 @@ function TrackingPage({ requests, user, onView }: {
                             {step.state === 'done' && <CheckCircle size={13} className="text-white" />}
                             {step.state === 'current' && <Clock size={13} className="text-white" />}
                             {step.state === 'rejected' && <XCircle size={13} className="text-white" />}
-                            {step.state === 'pending' && <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />}
+                            {step.state === 'pending' && null}
                           </div>
                           <div className={`flex-1 h-0.5 transition-colors rounded-full ${i === steps.length - 1 ? 'invisible' : lineColor(step.state)}`} />
                         </div>
@@ -1589,6 +2008,8 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
 
   type StepState = 'done' | 'current' | 'pending' | 'rejected';
   const s = req.status;
+  const done2 = ['accounting', 'transferred', 'received'].includes(s);
+  const done3 = ['transferred', 'received'].includes(s);
   const steps: { label: string; sub: string; state: StepState }[] = [
     { label: 'สร้างคำขอ', sub: req.createdAt, state: 'done' },
     {
@@ -1598,29 +2019,41 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
     },
     {
       label: 'ออก PR/PO',
-      sub: ['accounting', 'transferred'].includes(s) ? (req.prNo || req.updatedAt) : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
+      sub: done2 ? (req.prNo || req.updatedAt) : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
       state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : 'done',
     },
     {
       label: 'โอนเงิน',
-      sub: s === 'transferred' ? (req.transferDate || req.updatedAt) : s === 'accounting' ? 'รอโอนเงิน' : '—',
-      state: s === 'transferred' ? 'done' : s === 'accounting' ? 'current' : 'pending',
+      sub: done3 ? (req.transferDate || req.updatedAt) : s === 'accounting' ? 'รอโอนเงิน' : '—',
+      state: done3 ? 'done' : s === 'accounting' ? 'current' : 'pending',
+    },
+    {
+      label: 'รับสินค้า',
+      sub: s === 'received' ? (req.receivedAt || req.updatedAt) : s === 'transferred' ? 'รอรับสินค้า' : '—',
+      state: s === 'received' ? 'done' : s === 'transferred' ? 'current' : 'pending',
     },
   ];
   const lineColor = (st: StepState) =>
-    st === 'done' ? 'bg-green-400' : st === 'rejected' ? 'bg-red-300 dark:bg-red-800' : 'bg-slate-200 dark:bg-slate-700';
+    st === 'done' ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700';
   const circleClass = (st: StepState) =>
     st === 'done' ? 'bg-green-500 border-green-500' :
       st === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
         st === 'rejected' ? 'bg-red-500 border-red-500' :
-          'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+          'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
   const labelClass = (st: StepState) =>
     st === 'done' ? 'text-green-600 dark:text-green-400' :
       st === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
         st === 'rejected' ? 'text-red-500 dark:text-red-400' : 'text-slate-400';
 
   return (
-    <Modal open title={`${req.reqNo} — รายละเอียด`} onClose={onClose}>
+    <Modal open title={`${req.reqNo} — รายละเอียด`} onClose={onClose}
+      footer={
+        <div className="flex justify-end">
+          <button onClick={() => printRequest(req)} className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors">
+            <Printer size={13} />พิมพ์ / บันทึก PDF
+          </button>
+        </div>
+      }>
       <div className="space-y-4 text-sm">
         {/* Tracking Timeline */}
         <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4">
@@ -1635,7 +2068,7 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
                       {step.state === 'done' && <CheckCircle size={11} className="text-white" />}
                       {step.state === 'current' && <Clock size={11} className="text-white" />}
                       {step.state === 'rejected' && <XCircle size={11} className="text-white" />}
-                      {step.state === 'pending' && <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />}
+                      {step.state === 'pending' && null}
                     </div>
                     <div className={`flex-1 h-0.5 rounded-full ${i === steps.length - 1 ? 'invisible' : lineColor(step.state)}`} />
                   </div>
@@ -1691,14 +2124,55 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
             <p className="text-slate-600 dark:text-slate-400 text-xs">{req.notes}</p>
           </div>
         )}
-        {(req.prFile || req.poFile || req.transferFile) && (
+        {(req.requestFile || req.prFile || req.poFile || req.transferFile || req.deliveryNote || req.taxInvoice) && (
           <div>
-            <div className="text-[11px] text-slate-400 font-medium mb-2">ไฟล์เอกสารแนบ</div>
-            <div className="flex flex-col gap-3">
-              {req.prFile && <FileButton label="เอกสาร PR" raw={req.prFile} />}
-              {req.poFile && <FileButton label="เอกสาร PO" raw={req.poFile} />}
-              {req.transferFile && <FileButton label="สลิปโอนเงิน" raw={req.transferFile} />}
+            <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-3">เอกสารแนบ</div>
+            <div className="relative">
+              {/* vertical line */}
+              <div className="absolute left-[7px] top-2 bottom-2 w-px bg-green-400 dark:bg-green-600" />
+              <div className="space-y-5">
+                {req.requestFile && (
+                  <div className="relative pl-6">
+                    <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-green-400 dark:border-green-600 bg-white dark:bg-slate-900" />
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">พนักงาน</div>
+                    <FileButton label="ใบขอสั่งซื้อ" raw={req.requestFile} />
+                  </div>
+                )}
+                {(req.prFile || req.poFile) && (
+                  <div className="relative pl-6">
+                    <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-green-400 dark:border-green-600 bg-white dark:bg-slate-900" />
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">ฝ่ายจัดซื้อ</div>
+                    <div className="space-y-2">
+                      {req.prFile && <FileButton label="เอกสาร PR" raw={req.prFile} />}
+                      {req.poFile && <FileButton label="เอกสาร PO" raw={req.poFile} />}
+                    </div>
+                  </div>
+                )}
+                {req.transferFile && (
+                  <div className="relative pl-6">
+                    <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-green-400 dark:border-green-600 bg-white dark:bg-slate-900" />
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">ฝ่ายบัญชี</div>
+                    <FileButton label="สลิปโอนเงิน" raw={req.transferFile} />
+                  </div>
+                )}
+                {(req.deliveryNote || req.taxInvoice) && (
+                  <div className="relative pl-6">
+                    <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-green-400 dark:border-green-600 bg-white dark:bg-slate-900" />
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">พนักงาน (รับสินค้า)</div>
+                    <div className="space-y-2">
+                      {req.deliveryNote && <FileButton label="ใบส่งของ" raw={req.deliveryNote} />}
+                      {req.taxInvoice && <FileButton label="ใบกำกับภาษี" raw={req.taxInvoice} />}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+          </div>
+        )}
+        {req.receivedAt && (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl p-3">
+            <div className="text-[11px] text-green-600 dark:text-green-400 font-medium mb-0.5">รับสินค้าแล้ว</div>
+            <p className="text-slate-600 dark:text-slate-400 text-xs">วันที่รับสินค้า: {req.receivedAt}</p>
           </div>
         )}
       </div>
@@ -1707,6 +2181,99 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// DISCORD SETTINGS PAGE
+// ═══════════════════════════════════════════════════════════════════
+function DiscordSettingsPage({ current, onSave, toast }: {
+  current: SiteSettings; onSave: (s: SiteSettings) => void; toast: (m: string, t?: Toast['type']) => void;
+}) {
+  const [webhook, setWebhook] = useState(current.discordWebhook || '');
+  const [events, setEvents] = useState({
+    discordOnNewRequest: current.discordOnNewRequest ?? true,
+    discordOnPurchasing: current.discordOnPurchasing ?? true,
+    discordOnAccounting: current.discordOnAccounting ?? true,
+    discordOnTransferred: current.discordOnTransferred ?? true,
+    discordOnRejected: current.discordOnRejected ?? true,
+    discordOnReceived: current.discordOnReceived ?? true,
+  });
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const toggleEvt = (k: keyof typeof events) => setEvents(p => ({ ...p, [k]: !p[k] }));
+
+  const eventList: { key: keyof typeof events; label: string; desc: string }[] = [
+    { key: 'discordOnNewRequest', label: 'ใบขอซื้อใหม่', desc: 'เมื่อพนักงานสร้างใบขอซื้อ' },
+    { key: 'discordOnPurchasing', label: 'ออก PR/PO', desc: 'เมื่อฝ่ายจัดซื้อออกเอกสาร PR/PO' },
+    { key: 'discordOnAccounting', label: 'ส่งต่อบัญชี', desc: 'เมื่อส่งต่อให้ฝ่ายบัญชีโอนเงิน' },
+    { key: 'discordOnTransferred', label: 'โอนเงินสำเร็จ', desc: 'เมื่อบัญชีบันทึกการโอนเงิน' },
+    { key: 'discordOnRejected', label: 'ปฏิเสธคำขอ', desc: 'เมื่อใบขอซื้อถูกปฏิเสธ' },
+    { key: 'discordOnReceived', label: 'รับสินค้าแล้ว', desc: 'เมื่อพนักงานกดยืนยันรับสินค้า' },
+  ];
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.settings.update({ discordWebhook: webhook || null, ...events });
+      onSave(updated);
+      toast('บันทึกการตั้งค่า Discord สำเร็จ');
+    } catch (e: any) { toast(e.message || 'เกิดข้อผิดพลาด', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleTest = async () => {
+    if (!webhook.trim()) return toast('กรุณากรอก Webhook URL ก่อน', 'error');
+    setTesting(true);
+    try {
+      await api.settings.testDiscord(webhook);
+      toast('ส่งข้อความทดสอบไปยัง Discord สำเร็จ');
+    } catch (e: any) { toast(e.message || 'ส่งไม่สำเร็จ — ตรวจสอบ URL อีกครั้ง', 'error'); }
+    finally { setTesting(false); }
+  };
+
+  return (
+    <div className="page-anim max-w-xl flex flex-col gap-5">
+      <Card title="Discord Webhook">
+        <div className="p-5 flex flex-col gap-4">
+          <div>
+            <div className="text-xs text-slate-500 mb-1">วิธีรับ Webhook URL: Discord → ช่องที่ต้องการ → Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL</div>
+            <Input label="Webhook URL *" value={webhook} onChange={e => setWebhook(e.target.value)} placeholder="https://discord.com/api/webhooks/..." />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleTest} disabled={testing || !webhook.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 border border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50">
+              {testing ? <RefreshCw size={12} className="animate-spin" /> : <MessageSquare size={12} />}
+              ทดสอบส่งข้อความ
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="เลือก Event ที่จะแจ้งเตือน">
+        <div className="divide-y divide-slate-50 dark:divide-slate-800">
+          {eventList.map(ev => (
+            <div key={ev.key} className="flex items-center justify-between px-5 py-3.5">
+              <div>
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{ev.label}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{ev.desc}</div>
+              </div>
+              <button onClick={() => toggleEvt(ev.key)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${events[ev.key] ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${events[ev.key] ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <button onClick={handleSave} disabled={saving}
+        className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+        {saving ? <RefreshCw size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+        บันทึกการตั้งค่า
+      </button>
+    </div>
+  );
+}
+
 // SITE SETTINGS PAGE
 // ═══════════════════════════════════════════════════════════════════
 function SiteSettingsPage({ current, onSave, toast }: {
@@ -1843,6 +2410,12 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [collapsed, setCollapsed] = useState(false);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>({ siteName: 'Casa Lapin', siteSubtitle: 'ระบบขอซื้อสินค้า', logoUrl: null });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // โหลด settings ตั้งแต่เริ่ม (ก่อน login) เพื่อให้หน้า login แสดง branding ที่ถูกต้อง
+  useEffect(() => {
+    api.settings.get().then(s => { setSiteSettings(s); setSettingsLoaded(true); }).catch(() => setSettingsLoaded(true));
+  }, []);
 
   // อัปเดต favicon + title ทุกครั้งที่ settings เปลี่ยน
   useEffect(() => {
@@ -1866,8 +2439,11 @@ export default function App() {
   const [viewReq, setViewReq] = useState<PurchaseRequest | null>(null);
   const [issuePRReq, setIssuePRReq] = useState<PurchaseRequest | null>(null);
   const [rejectReq, setRejectReq] = useState<PurchaseRequest | null>(null);
+  const [rejectNotes, setRejectNotes] = useState('');
   const [forwardReq, setForwardReq] = useState<PurchaseRequest | null>(null);
   const [recordPayReq, setRecordPayReq] = useState<PurchaseRequest | null>(null);
+  const [editReq, setEditReq] = useState<PurchaseRequest | null>(null);
+  const [receiveReq, setReceiveReq] = useState<PurchaseRequest | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
   const [resetPwUser, setResetPwUser] = useState<User | null>(null);
   const [editUserTarget, setEditUserTarget] = useState<User | null | undefined>(undefined);
@@ -1906,13 +2482,29 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) { setRequests([]); setUsers([]); setAuditLogs([]); return; }
     api.settings.get().then(setSiteSettings).catch(console.error);
-    api.requests.list().then(setRequests).catch(console.error);
+    const fetchReq = ['owner', 'purchasing', 'accounting', 'itsupport'].includes(currentUser.role)
+      ? api.requests.listAll()
+      : api.requests.list();
+    fetchReq.then(setRequests).catch(console.error);
     if (currentUser.role === 'itsupport') {
       api.users.list().then(setUsers).catch(console.error);
       api.audit.list().then(setAuditLogs).catch(console.error);
     } else if (currentUser.role === 'owner') {
       api.audit.list().then(setAuditLogs).catch(console.error);
     }
+  }, [currentUser?.id]);
+
+  // Polling ทุก 30 วินาที — ดึง requests ใหม่อัตโนมัติ
+  useEffect(() => {
+    if (!currentUser) return;
+    const poll = () => {
+      const fetchReq = ['owner', 'purchasing', 'accounting', 'itsupport'].includes(currentUser.role)
+        ? api.requests.listAll()
+        : api.requests.list();
+      fetchReq.then(setRequests).catch(console.error);
+    };
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
   }, [currentUser?.id]);
 
   const toast = useCallback((message: string, type: Toast['type'] = 'success') => {
@@ -1967,13 +2559,14 @@ export default function App() {
     } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleReject = async (id: string) => {
+  const handleReject = async (id: string, notes: string) => {
     try {
-      const updated = await api.requests.updateStatus(id, { status: 'rejected', notes: 'ปฏิเสธโดยฝ่ายจัดซื้อ' });
+      const updated = await api.requests.updateStatus(id, { status: 'rejected', notes: notes || undefined });
       setRequests(r => r.map(x => x.id === id ? updated : x));
-      addAudit('REJECT', 'Purchase Request', 'ปฏิเสธคำขอ');
+      addAudit('REJECT', 'Purchase Request', `ปฏิเสธคำขอ${notes ? `: ${notes}` : ''}`);
       toast('ปฏิเสธคำขอแล้ว', 'info');
       setRejectReq(null);
+      setRejectNotes('');
     } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
@@ -2025,6 +2618,12 @@ export default function App() {
     } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
+  if (!settingsLoaded) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
   if (!currentUser) return (
     <>
       <LoginPage onLogin={handleLogin} siteSettings={siteSettings} />
@@ -2035,9 +2634,9 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'dashboard': return <DashboardPage requests={requests} />;
-      case 'my-requests': return <MyRequestsPage requests={requests} user={currentUser} onView={setViewReq} />;
+      case 'my-requests': return <MyRequestsPage requests={requests} user={currentUser} onView={setViewReq} onEdit={setEditReq} onReceive={setReceiveReq} />;
       case 'create-request': return <CreateRequestPage user={currentUser} onSave={handleCreateRequest} toast={toast} />;
-      case 'pending-approval': return <PendingApprovalPage requests={requests} onIssuePRPO={r => { setIssuePRReq(r); setPrFile(''); setPrFileUrl(''); setPoFile(''); setPoFileUrl(''); }} onReject={setRejectReq} />;
+      case 'pending-approval': return <PendingApprovalPage requests={requests} onIssuePRPO={r => { setIssuePRReq(r); setPrFile(''); setPrFileUrl(''); setPoFile(''); setPoFileUrl(''); }} onReject={setRejectReq} onView={setViewReq} />;
       case 'issue-pr-po': return <IssuePRPOPage requests={requests} onIssue={handleIssuePRPO} toast={toast} />;
       case 'forward-accounting': return <ForwardAccountingPage requests={requests} onForward={r => setForwardReq(r)} />;
       case 'payment-list': return <PaymentListPage requests={requests} onRecord={r => { setRecordPayReq(r); setTransferDate(today()); }} />;
@@ -2047,6 +2646,7 @@ export default function App() {
       case 'add-user': return <AddUserPage editUser={editUserTarget} onSave={handleSaveUser} />;
       case 'audit-log': return <AuditLogPage logs={auditLogs} />;
       case 'site-settings': return <SiteSettingsPage current={siteSettings} onSave={setSiteSettings} toast={toast} />;
+      case 'discord-settings': return <DiscordSettingsPage current={siteSettings} onSave={setSiteSettings} toast={toast} />;
       case 'all-requests': return <AllRequestsPage requests={requests} />;
       case 'reports': return <ReportsPage requests={requests} />;
       case 'tracking': return <TrackingPage requests={requests} user={currentUser} onView={setViewReq} />;
@@ -2092,11 +2692,32 @@ export default function App() {
         )}
       </Modal>
 
-      {/* Reject Confirm */}
-      <ConfirmDialog open={!!rejectReq} title="ปฏิเสธคำขอ"
-        message={`ยืนยันการปฏิเสธ "${rejectReq?.title}" ? การกระทำนี้ไม่สามารถยกเลิกได้`}
-        onConfirm={() => rejectReq && handleReject(rejectReq.id)}
-        onCancel={() => setRejectReq(null)} confirmLabel="ปฏิเสธ" />
+      {/* Reject Modal */}
+      <Modal open={!!rejectReq} title="ปฏิเสธคำขอ" onClose={() => { setRejectReq(null); setRejectNotes(''); }}
+        footer={
+          <div className="flex gap-3">
+            <button onClick={() => rejectReq && handleReject(rejectReq.id, rejectNotes)}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-xl py-2 text-sm font-semibold transition-colors">
+              ยืนยันปฏิเสธ
+            </button>
+            <button onClick={() => { setRejectReq(null); setRejectNotes(''); }}
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              ยกเลิก
+            </button>
+          </div>
+        }>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800">
+            <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{rejectReq?.title}</div>
+              <div className="text-xs text-slate-400 mt-0.5">การปฏิเสธนี้ไม่สามารถยกเลิกได้</div>
+            </div>
+          </div>
+          <Textarea label="หมายเหตุการปฏิเสธ" value={rejectNotes} onChange={e => setRejectNotes(e.target.value)}
+            rows={3} placeholder="ระบุเหตุผลการปฏิเสธ..." />
+        </div>
+      </Modal>
 
       {/* Forward Confirm */}
       <ConfirmDialog open={!!forwardReq} title="ส่งต่อฝ่ายบัญชี"
@@ -2126,6 +2747,16 @@ export default function App() {
           </div>
         )}
       </Modal>
+
+      {/* Receive Goods Modal */}
+      {receiveReq && <ReceiveGoodsModal req={receiveReq} onClose={() => setReceiveReq(null)}
+        onSaved={updated => { setRequests(r => r.map(x => x.id === updated.id ? updated : x)); setReceiveReq(null); toast('บันทึกการรับสินค้าสำเร็จ'); }}
+        toast={toast} />}
+
+      {/* Edit Request Modal */}
+      {editReq && <EditRequestModal req={editReq} onClose={() => setEditReq(null)}
+        onSaved={updated => { setRequests(r => r.map(x => x.id === updated.id ? updated : x)); setEditReq(null); toast('บันทึกการแก้ไขสำเร็จ'); }}
+        toast={toast} />}
 
       {/* Delete User Confirm */}
       <ConfirmDialog open={!!deleteUserTarget} title="ลบผู้ใช้"

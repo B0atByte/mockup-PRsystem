@@ -28,13 +28,13 @@ function base(title: string, body: string) {
   return `
   <div style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
     <div style="background:#1d4ed8;padding:20px 24px;border-radius:8px 8px 0 0">
-      <h2 style="color:#fff;margin:0;font-size:18px">Casa Lapin — ระบบขอซื้อสินค้า</h2>
+      <h2 style="color:#fff;margin:0;font-size:18px">PR System</h2>
     </div>
     <div style="background:#fff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e2e8f0">
       <h3 style="color:#1e293b;margin-top:0">${title}</h3>
       ${body}
       <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0"/>
-      <p style="color:#94a3b8;font-size:12px;margin:0">อีเมลนี้ส่งอัตโนมัติจากระบบ Casa Lapin PR System — กรุณาอย่าตอบกลับ</p>
+      <p style="color:#94a3b8;font-size:12px;margin:0">อีเมลนี้ส่งอัตโนมัติจากระบบ PR System — กรุณาอย่าตอบกลับ</p>
     </div>
   </div>`
 }
