@@ -1617,7 +1617,11 @@ function IssuePRPOPage({ requests, onIssue, toast }: { requests: PurchaseRequest
   );
 }
 
-function ForwardAccountingPage({ requests, onForward }: { requests: PurchaseRequest[]; onForward: (r: PurchaseRequest) => void }) {
+function ForwardAccountingPage({ requests, onForward, onAddFile }: {
+  requests: PurchaseRequest[];
+  onForward: (r: PurchaseRequest) => void;
+  onAddFile: (r: PurchaseRequest) => void;
+}) {
   const ready = requests.filter(r => r.status === 'purchasing');
   return (
     <div className="page-anim flex flex-col gap-4">
@@ -1626,18 +1630,43 @@ function ForwardAccountingPage({ requests, onForward }: { requests: PurchaseRequ
           <CheckCircle size={36} className="mx-auto text-green-400 mb-3" />
           <p className="text-slate-400 text-sm">ไม่มีรายการรอส่งต่อบัญชี</p>
         </div>
-      ) : ready.map(r => (
-        <div key={r.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5 flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-0.5"><span className="text-xs font-mono text-slate-400">{r.reqNo}</span><StatusBadge status={r.status} /></div>
-            <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{r.title}</div>
-            <div className="text-xs text-slate-400 mt-1">PR: <span className="font-mono">{r.prNo}</span> · PO: <span className="font-mono">{r.poNo}</span> · <span className="font-semibold text-slate-600 dark:text-slate-300">฿{fmt(r.totalAmount)}</span></div>
+      ) : ready.map(r => {
+        const hasAll = !!r.prFile && !!r.poFile;
+        return (
+          <div key={r.id} className={`bg-white dark:bg-slate-900 rounded-2xl border p-5 flex items-center justify-between gap-4 ${!hasAll ? 'border-amber-200 dark:border-amber-700' : 'border-slate-100 dark:border-slate-800'}`}>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <span className="text-xs font-mono text-slate-400">{r.reqNo}</span>
+                <StatusBadge status={r.status} />
+                {!hasAll && <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-full">ไฟล์ไม่ครบ</span>}
+              </div>
+              <div className="font-semibold text-slate-800 dark:text-white text-sm truncate">{r.title}</div>
+              <div className="text-xs text-slate-400 mt-1 flex gap-2 flex-wrap">
+                <span className={r.prFile ? 'text-green-600' : 'text-red-400'}>
+                  {r.prFile ? '✓' : '✗'} PR {r.prNo || '—'}
+                </span>
+                <span>·</span>
+                <span className={r.poFile ? 'text-green-600' : 'text-red-400'}>
+                  {r.poFile ? '✓' : '✗'} PO {r.poNo || '—'}
+                </span>
+                <span>·</span>
+                <span className="font-semibold text-slate-600 dark:text-slate-300">฿{fmt(r.totalAmount)}</span>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              {!hasAll && (
+                <button onClick={() => onAddFile(r)} className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 text-white rounded-xl text-xs font-semibold hover:bg-amber-600 transition-colors">
+                  <Upload size={13} />แนบไฟล์
+                </button>
+              )}
+              <button onClick={() => onForward(r)} disabled={!hasAll}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <Send size={13} />ส่งต่อบัญชี
+              </button>
+            </div>
           </div>
-          <button onClick={() => onForward(r)} className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-semibold hover:bg-purple-700 transition-colors shrink-0">
-            <Send size={13} />ส่งต่อบัญชี
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -2200,9 +2229,10 @@ function TrackingPage({ requests, user, onView }: {
 
   const getSteps = (r: PurchaseRequest): { label: string; sub: string; state: StepState }[] => {
     const s = r.status;
-    const donePR = ['accounting', 'transferred', 'received'].includes(s);
-    const donePO = ['accounting', 'transferred', 'received'].includes(s);
+    const hasPR = !!r.prFile;
+    const hasPO = !!r.poFile;
     const done3 = ['transferred', 'received'].includes(s);
+    const inPurchasing = ['purchasing', 'accounting', 'transferred', 'received'].includes(s);
     return [
       { label: 'สร้างคำขอ', sub: r.createdAt, state: 'done' },
       {
@@ -2212,13 +2242,13 @@ function TrackingPage({ requests, user, onView }: {
       },
       {
         label: 'ออก PR',
-        sub: donePR ? (r.prNo || '—') : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
-        state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : 'done',
+        sub: hasPR ? (r.prNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
+        state: s === 'rejected' || s === 'pending' ? 'pending' : hasPR ? 'done' : 'current',
       },
       {
         label: 'ออก PO',
-        sub: donePO ? (r.poNo || '—') : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
-        state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : donePO ? 'done' : 'pending',
+        sub: hasPO ? (r.poNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
+        state: s === 'rejected' || s === 'pending' ? 'pending' : hasPO ? 'done' : hasPR ? 'current' : 'pending',
       },
       {
         label: 'โอนเงิน',
@@ -2377,8 +2407,10 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
 
   type StepState = 'done' | 'current' | 'pending' | 'rejected';
   const s = req.status;
-  const donePR = ['accounting', 'transferred', 'received'].includes(s);
+  const hasPR = !!req.prFile;
+  const hasPO = !!req.poFile;
   const done3 = ['transferred', 'received'].includes(s);
+  const inPurchasing = ['purchasing', 'accounting', 'transferred', 'received'].includes(s);
   const steps: { label: string; sub: string; state: StepState }[] = [
     { label: 'สร้างคำขอ', sub: req.createdAt, state: 'done' },
     {
@@ -2388,13 +2420,13 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
     },
     {
       label: 'ออก PR',
-      sub: donePR ? (req.prNo || '—') : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
-      state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : 'done',
+      sub: hasPR ? (req.prNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
+      state: s === 'rejected' || s === 'pending' ? 'pending' : hasPR ? 'done' : 'current',
     },
     {
       label: 'ออก PO',
-      sub: donePR ? (req.poNo || '—') : s === 'purchasing' ? 'กำลังดำเนินการ' : '—',
-      state: s === 'rejected' || s === 'pending' ? 'pending' : s === 'purchasing' ? 'current' : donePR ? 'done' : 'pending',
+      sub: hasPO ? (req.poNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
+      state: s === 'rejected' || s === 'pending' ? 'pending' : hasPO ? 'done' : hasPR ? 'current' : 'pending',
     },
     {
       label: 'โอนเงิน',
@@ -3070,16 +3102,25 @@ export default function App() {
     } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
-  const handleIssuePRPO = async (id: string, prf: string, pof: string, notes: string) => {
+  const handleIssuePRPO = async (id: string, prf: string, pof: string, notes: string, isDraft = false) => {
     try {
+      const existing = requests.find(x => x.id === id);
       const n = requests.filter(x => x.prNo).length + 1;
-      const prNo = `PR-${String(n).padStart(3, '0')}`;
-      const poNo = `PO-${String(n).padStart(3, '0')}`;
-      const updated = await api.requests.updateStatus(id, { status: 'purchasing', prNo, poNo, prFile: prf, poFile: pof, notes });
+      const prNo = existing?.prNo || `PR-${String(n).padStart(3, '0')}`;
+      const poNo = existing?.poNo || `PO-${String(n).padStart(3, '0')}`;
+      const payload: any = { status: 'purchasing', prNo, poNo, notes };
+      if (prf) payload.prFile = prf;
+      if (pof) payload.poFile = pof;
+      const updated = await api.requests.updateStatus(id, payload);
       setRequests(r => r.map(x => x.id === id ? updated : x));
-      addAudit('UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
-      toast('แนบเอกสาร PR/PO สำเร็จ พร้อมส่งต่อฝ่ายบัญชี');
-      setIssuePRReq(null); setPrFile(''); setPoFile(''); setPrNotes('');
+      if (isDraft) {
+        addAudit('UPDATE', 'Purchase Request', `บันทึกร่าง PR/PO ${prNo}`);
+        toast('บันทึกแบบร่างแล้ว — แนบเอกสารให้ครบก่อนส่งต่อบัญชี', 'warning');
+      } else {
+        addAudit('UPDATE', 'Purchase Request', `แนบเอกสาร PR/PO ${prNo}/${poNo}`);
+        toast('แนบเอกสาร PR/PO ครบแล้ว');
+      }
+      setIssuePRReq(null); setPrFile(''); setPrFileUrl(''); setPoFile(''); setPoFileUrl(''); setPrNotes('');
     } catch (err: any) { toast(err.message || 'เกิดข้อผิดพลาด', 'error'); }
   };
 
@@ -3162,7 +3203,7 @@ export default function App() {
       case 'create-request': return <CreateRequestPage user={currentUser} onSave={handleCreateRequest} toast={toast} />;
       case 'pending-approval': return <PendingApprovalPage requests={requests} onIssuePRPO={r => { setIssuePRReq(r); setPrFile(''); setPrFileUrl(''); setPoFile(''); setPoFileUrl(''); }} onReject={setRejectReq} onView={setViewReq} />;
       case 'issue-pr-po': return <IssuePRPOPage requests={requests} onIssue={handleIssuePRPO} toast={toast} />;
-      case 'forward-accounting': return <ForwardAccountingPage requests={requests} onForward={r => setForwardReq(r)} />;
+      case 'forward-accounting': return <ForwardAccountingPage requests={requests} onForward={r => setForwardReq(r)} onAddFile={r => { setIssuePRReq(r); setPrFile(''); setPrFileUrl(''); setPoFile(''); setPoFileUrl(''); setPrNotes(''); }} />;
       case 'payment-list': return <PaymentListPage requests={requests} onRecord={r => { setRecordPayReq(r); setTransferDate(today()); }} />;
       case 'record-payment': return <RecordPaymentPage requests={requests} onTransfer={handleTransfer} toast={toast} />;
       case 'payment-history': return <PaymentHistoryPage requests={requests} />;
@@ -3198,9 +3239,39 @@ export default function App() {
       {/* Issue PR/PO Modal */}
       <Modal open={!!issuePRReq} title="แนบเอกสาร PR / PO" onClose={() => setIssuePRReq(null)}
         footer={
-          <div className="flex gap-3">
-            <button onClick={() => { if (!prFileUrl) { toast('กรุณาแนบเอกสาร PR', 'error'); return; } if (!poFileUrl) { toast('กรุณาแนบเอกสาร PO', 'error'); return; } handleIssuePRPO(issuePRReq!.id, prFileUrl, poFileUrl, prNotes); }} className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-blue-700 transition-colors">ยืนยันและส่งต่อบัญชี</button>
-            <button onClick={() => setIssuePRReq(null)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">ยกเลิก</button>
+          <div className="flex flex-col gap-2">
+            {/* status indicator */}
+            <div className="flex gap-3 text-xs mb-1">
+              <span className={`flex items-center gap-1 font-medium ${(prFileUrl || issuePRReq?.prFile) ? 'text-green-600' : 'text-slate-400'}`}>
+                {(prFileUrl || issuePRReq?.prFile) ? <CheckCircle size={12} /> : <Clock size={12} />} PR
+              </span>
+              <span className={`flex items-center gap-1 font-medium ${(poFileUrl || issuePRReq?.poFile) ? 'text-green-600' : 'text-slate-400'}`}>
+                {(poFileUrl || issuePRReq?.poFile) ? <CheckCircle size={12} /> : <Clock size={12} />} PO
+              </span>
+              {(prFileUrl || issuePRReq?.prFile) && (poFileUrl || issuePRReq?.poFile)
+                ? <span className="text-green-600 font-semibold">ครบแล้ว ✓</span>
+                : <span className="text-amber-500">ยังไม่ครบ — บันทึกแบบร่างได้</span>}
+            </div>
+            <div className="flex gap-2">
+              {/* บันทึกแบบร่าง — ต้องมีอย่างน้อย 1 ไฟล์ */}
+              <button
+                onClick={() => {
+                  if (!prFileUrl && !poFileUrl && !issuePRReq?.prFile && !issuePRReq?.poFile)
+                    return toast('กรุณาแนบเอกสารอย่างน้อย 1 ไฟล์', 'error');
+                  handleIssuePRPO(issuePRReq!.id, prFileUrl, poFileUrl, prNotes, true);
+                }}
+                className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl py-2 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                บันทึกแบบร่าง
+              </button>
+              {/* บันทึกครบ — ต้องมีทั้ง 2 ไฟล์ */}
+              <button
+                disabled={!(prFileUrl || issuePRReq?.prFile) || !(poFileUrl || issuePRReq?.poFile)}
+                onClick={() => handleIssuePRPO(issuePRReq!.id, prFileUrl || issuePRReq?.prFile || '', poFileUrl || issuePRReq?.poFile || '', prNotes)}
+                className="flex-1 bg-blue-600 text-white rounded-xl py-2 text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                บันทึกครบ ✓
+              </button>
+            </div>
+            <button onClick={() => setIssuePRReq(null)} className="text-xs text-slate-400 hover:text-slate-600 text-center py-1">ยกเลิก</button>
           </div>
         }>
         {issuePRReq && (
@@ -3209,8 +3280,16 @@ export default function App() {
               <div className="font-semibold text-slate-700 dark:text-slate-200 text-sm">{issuePRReq.title}</div>
               <div className="mt-1">฿<span className="font-bold text-blue-600">{fmt(issuePRReq.totalAmount)}</span> · {issuePRReq.createdByName}</div>
             </div>
-            <FileUploadField label="เอกสาร PR *" fileName={prFile} onFile={(name, url) => { setPrFile(name); setPrFileUrl(url); }} onError={msg => toast(msg, 'error')} />
-            <FileUploadField label="เอกสาร PO *" fileName={poFile} onFile={(name, url) => { setPoFile(name); setPoFileUrl(url); }} onError={msg => toast(msg, 'error')} />
+            <FileUploadField
+              label={`เอกสาร PR ${issuePRReq.prFile ? '(มีไฟล์แล้ว — อัปโหลดใหม่เพื่อแทนที่)' : '*'}`}
+              fileName={prFile}
+              onFile={(name, url) => { setPrFile(name); setPrFileUrl(url); }}
+              onError={msg => toast(msg, 'error')} />
+            <FileUploadField
+              label={`เอกสาร PO ${issuePRReq.poFile ? '(มีไฟล์แล้ว — อัปโหลดใหม่เพื่อแทนที่)' : '*'}`}
+              fileName={poFile}
+              onFile={(name, url) => { setPoFile(name); setPoFileUrl(url); }}
+              onError={msg => toast(msg, 'error')} />
             <Textarea label="หมายเหตุ" value={prNotes} onChange={e => setPrNotes(e.target.value)} rows={2} />
           </div>
         )}
