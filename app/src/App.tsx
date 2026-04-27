@@ -2314,8 +2314,18 @@ function TrackingPage({ requests, user, onView }: {
                       <StatusBadge status={r.status} />
                     </div>
                     <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{r.title}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {r.createdByName} · <span className="font-semibold text-slate-600 dark:text-slate-300">฿{fmt(r.totalAmount)}</span>
+                    <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>{r.createdByName}</span>
+                      <span>·</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">฿{fmt(r.totalAmount)}</span>
+                      {r.dueDate && (
+                        <>
+                          <span>·</span>
+                          <span className={`flex items-center gap-1 font-medium ${r.dueDate < today() && !['received','rejected'].includes(r.status) ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <CalendarDays size={11} />ชำระ: {r.dueDate}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-slate-300 dark:text-slate-600 shrink-0 mt-1" />
