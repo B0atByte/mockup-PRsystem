@@ -2464,19 +2464,44 @@ function TrackingPage({ requests, user, onView }: {
         state === 'rejected' ? 'text-red-500 dark:text-red-400' :
           'text-slate-400';
 
-  const visible = requests
-    .filter(r => user.role === 'employee' ? r.createdBy === user.id : true)
-    .filter(r =>
-      (!search || r.title.toLowerCase().includes(search.toLowerCase()) || r.reqNo.toLowerCase().includes(search.toLowerCase())) &&
-      (!filterStatus || r.status === filterStatus)
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const [filterCat, setFilterCat] = useState('');
+  const [filterOverdue, setFilterOverdue] = useState(false);
+  const [sortKey, setSortKey] = useState<'updatedAt'|'createdAt'|'totalAmount'|'dueDate'>('updatedAt');
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
+  const todayStr = today();
+  const cats = [...new Set(requests.map(r => r.category).filter(Boolean))];
+
+  const toggleSort = (k: typeof sortKey) => {
+    if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(k); setSortDir(k === 'totalAmount' ? 'desc' : 'asc'); }
+  };
+
+  const base = requests.filter(r => user.role === 'employee' ? r.createdBy === user.id : true);
+  const overdueCount = base.filter(r => r.dueDate && r.dueDate < todayStr && !['received','rejected'].includes(r.status)).length;
+
+  const visible = [...base.filter(r =>
+    (!search || r.title.toLowerCase().includes(search.toLowerCase()) || r.reqNo.toLowerCase().includes(search.toLowerCase())) &&
+    (!filterStatus || r.status === filterStatus) &&
+    (!filterCat || r.category === filterCat) &&
+    (!filterOverdue || (r.dueDate && r.dueDate < todayStr && !['received','rejected'].includes(r.status)))
+  )].sort((a, b) => {
+    const av = a[sortKey] || '', bv = b[sortKey] || '';
+    const cmp = typeof av === 'number' ? av - (bv as number) : String(av).localeCompare(String(bv));
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
   const pagedVisible = visible.slice((page - 1) * pageSize, page * pageSize);
 
   const allCounts = (['pending', 'purchasing', 'accounting', 'transferred', 'received', 'rejected'] as const).map(k => ({
     key: k,
-    count: requests.filter(r => (user.role === 'employee' ? r.createdBy === user.id : true) && r.status === k).length,
+    count: base.filter(r => r.status === k).length,
   })).filter(s => s.count > 0);
+
+  const sortBtn = (k: typeof sortKey, label: string) => (
+    <button onClick={() => { toggleSort(k); setPage(1); }}
+      className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${sortKey === k ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'}`}>
+      {label} {sortKey === k ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+    </button>
+  );
 
   return (
     <div className="page-anim flex flex-col gap-4">
@@ -2484,24 +2509,45 @@ function TrackingPage({ requests, user, onView }: {
       <div className="flex flex-wrap gap-2 items-center">
         {allCounts.map(s => (
           <button key={s.key}
-            onClick={() => { setFilterStatus(filterStatus === s.key ? '' : s.key); setPage(1); }}
+            onClick={() => { setFilterStatus(filterStatus === s.key ? '' : s.key); setFilterOverdue(false); setPage(1); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 transition-all hover:shadow-sm ${filterStatus === s.key ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}>
             <StatusBadge status={s.key} />
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{s.count}</span>
           </button>
         ))}
-        {filterStatus && (
-          <button onClick={() => { setFilterStatus(''); setPage(1); }}
+        {overdueCount > 0 && (
+          <button onClick={() => { setFilterOverdue(!filterOverdue); setFilterStatus(''); setPage(1); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all hover:shadow-sm ${filterOverdue ? 'bg-red-500 border-red-500 text-white' : 'bg-white dark:bg-slate-900 border-red-200 dark:border-red-800 text-red-500'}`}>
+            <AlertCircle size={12} />
+            <span className="text-xs font-bold">เกินกำหนด {overdueCount}</span>
+          </button>
+        )}
+        {(filterStatus || filterCat || filterOverdue) && (
+          <button onClick={() => { setFilterStatus(''); setFilterCat(''); setFilterOverdue(false); setPage(1); }}
             className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors">
-            <X size={11} />ล้างตัวกรอง
+            <X size={11} />ล้างทั้งหมด
           </button>
         )}
       </div>
 
-      {/* Search + count + export */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Search + filters + sort + export */}
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-[180px] max-w-xs">
           <SearchBar value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="ค้นหาเลขที่ / รายการ..." />
+        </div>
+        {cats.length > 0 && (
+          <select value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}
+            className="px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-white outline-none">
+            <option value="">ทุกหมวด</option>
+            {cats.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+          <span>เรียง:</span>
+          {sortBtn('updatedAt', 'อัปเดต')}
+          {sortBtn('createdAt', 'วันที่สร้าง')}
+          {sortBtn('totalAmount', 'ยอดเงิน')}
+          {sortBtn('dueDate', 'วันครบกำหนด')}
         </div>
         <span className="text-xs text-slate-400">{visible.length} รายการ</span>
         <button onClick={() => api.requests.exportExcel(filterStatus || undefined).catch(() => { })}
