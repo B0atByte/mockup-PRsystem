@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth.js'
 import { writeFile, readFile } from 'fs/promises'
 import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
+import sharp from 'sharp'
 
 const router = new Hono()
 
@@ -10,16 +11,16 @@ const UPLOAD_DIR = path.resolve('./uploads')
 if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
-
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.xlsx', '.xls', '.docx', '.doc'])
 
 const MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
+  '.webp': 'image/webp',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
-  '.webp': 'image/webp',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.xls': 'application/vnd.ms-excel',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -44,8 +45,21 @@ router.post('/', authMiddleware, async (c) => {
     return c.json({ error: `ประเภทไฟล์ไม่รองรับ (รองรับ: ${[...ALLOWED_EXTENSIONS].join(', ')})` }, 400)
   }
 
-  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`
-  await writeFile(path.join(UPLOAD_DIR, safeName), Buffer.from(await file.arrayBuffer()))
+  const baseName = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  let buffer = Buffer.from(await file.arrayBuffer())
+  let savedExt = ext
+
+  // compress รูปภาพทุกประเภทเป็น WebP อัตโนมัติ (ยกเว้น GIF)
+  if (IMAGE_EXTENSIONS.has(ext) && ext !== '.gif') {
+    buffer = await sharp(buffer)
+      .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer()
+    savedExt = '.webp'
+  }
+
+  const safeName = `${baseName}${savedExt}`
+  await writeFile(path.join(UPLOAD_DIR, safeName), buffer)
 
   return c.json({ url: `/api/files/${safeName}`, name: file.name })
 })
@@ -59,7 +73,8 @@ router.get('/:filename', async (c) => {
   }
 
   const ext = path.extname(filename).toLowerCase()
-  if (!ALLOWED_EXTENSIONS.has(ext)) {
+  const allowedWithWebp = new Set([...ALLOWED_EXTENSIONS, '.webp'])
+  if (!allowedWithWebp.has(ext)) {
     return c.json({ error: 'Invalid filename' }, 400)
   }
 
@@ -71,6 +86,7 @@ router.get('/:filename', async (c) => {
       headers: {
         'Content-Type': mime,
         'Content-Disposition': `inline; filename="${filename}"`,
+        'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
   } catch {
