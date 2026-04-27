@@ -1677,14 +1677,29 @@ function ForwardAccountingPage({ requests, onForward, onAddFile }: {
   onForward: (r: PurchaseRequest) => void;
   onAddFile: (r: PurchaseRequest) => void;
 }) {
-  const ready = requests.filter(r => r.status === 'purchasing');
+  const [search, setSearch] = useState('');
+  const all = requests.filter(r => r.status === 'purchasing');
+  const ready = all.filter(r =>
+    !search ||
+    r.title.toLowerCase().includes(search.toLowerCase()) ||
+    r.reqNo.toLowerCase().includes(search.toLowerCase()) ||
+    (r.prNo || '').toLowerCase().includes(search.toLowerCase())
+  );
   return (
     <div className="page-anim flex flex-col gap-4">
-      {ready.length === 0 ? (
+      <div className="flex items-center gap-3">
+        <div className="flex-1 max-w-xs">
+          <SearchBar value={search} onChange={setSearch} placeholder="ค้นหาเลขที่ / รายการ..." />
+        </div>
+        <span className="text-xs text-slate-400">{ready.length} รายการ</span>
+      </div>
+      {all.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 py-16 text-center">
           <CheckCircle size={36} className="mx-auto text-green-400 mb-3" />
           <p className="text-slate-400 text-sm">ไม่มีรายการรอส่งต่อบัญชี</p>
         </div>
+      ) : ready.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 py-12 text-center text-slate-400 text-sm">ไม่พบรายการที่ค้นหา</div>
       ) : ready.map(r => {
         const hasAll = !!r.prFile && !!r.poFile;
         return (
