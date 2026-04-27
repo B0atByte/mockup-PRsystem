@@ -620,7 +620,7 @@ const MENU: MenuItem[] = [
   { id: 'my-requests', label: 'คำขอของฉัน', icon: FileText, roles: ['employee'] },
   { id: 'tracking', label: 'ติดตามคำขอ', icon: Package, roles: ['owner', 'employee', 'purchasing', 'accounting', 'itsupport'] },
   { id: 'pending-approval', label: 'รายการรออนุมัติ', icon: Clock, roles: ['purchasing', 'itsupport'] },
-  { id: 'issue-pr-po', label: 'ออก PR / PO', icon: FileCheck, roles: ['purchasing'] },
+  { id: 'issue-pr-po', label: 'แนบเอกสาร PR / PO', icon: FileCheck, roles: ['purchasing'] },
   { id: 'forward-accounting', label: 'ส่งต่อบัญชี', icon: Send, roles: ['purchasing'] },
   { id: 'payment-list', label: 'รายการรอโอนเงิน', icon: Banknote, roles: ['accounting', 'itsupport'] },
   { id: 'record-payment', label: 'บันทึกการโอนเงิน', icon: CreditCard, roles: ['accounting'] },
@@ -702,7 +702,7 @@ function Topbar({ page, user, requests, onLogout, collapsed, setCollapsed, mobil
 
   const pageTitles: Partial<Record<Page, string>> = {
     dashboard: 'แดชบอร์ด', 'my-requests': 'คำขอของฉัน', 'create-request': 'สร้างใบขอซื้อ',
-    'pending-approval': 'รายการรออนุมัติ', 'issue-pr-po': 'ออก PR / PO', 'forward-accounting': 'ส่งต่อบัญชี',
+    'pending-approval': 'รายการรออนุมัติ', 'issue-pr-po': 'แนบเอกสาร PR / PO', 'forward-accounting': 'ส่งต่อบัญชี',
     'payment-list': 'รายการรอโอนเงิน', 'record-payment': 'บันทึกการโอนเงิน', 'payment-history': 'ประวัติการโอน',
     'discord-settings': 'Discord แจ้งเตือน',
     'user-management': 'จัดการผู้ใช้', 'add-user': 'เพิ่มผู้ใช้ใหม่', 'audit-log': 'Audit Log',
