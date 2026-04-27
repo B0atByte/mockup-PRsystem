@@ -2142,6 +2142,21 @@ function AddUserPage({ editUser, onSave }: { editUser?: User | null; onSave: (d:
   );
 }
 
+function fmtTimestamp(ts: string) {
+  if (!ts) return { date: '—', time: '—', rel: '' }
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return { date: ts, time: '', rel: '' }
+  const date = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+  let rel = ''
+  if (diff < 60) rel = `${diff} วินาทีที่แล้ว`
+  else if (diff < 3600) rel = `${Math.floor(diff / 60)} นาทีที่แล้ว`
+  else if (diff < 86400) rel = `${Math.floor(diff / 3600)} ชั่วโมงที่แล้ว`
+  else if (diff < 604800) rel = `${Math.floor(diff / 86400)} วันที่แล้ว`
+  return { date, time, rel }
+}
+
 function AuditLogPage({ logs }: { logs: AuditLog[] }) {
   const [search, setSearch] = useState('');
   const [filterAction, setFilterAction] = useState('');
@@ -2199,19 +2214,25 @@ function AuditLogPage({ logs }: { logs: AuditLog[] }) {
         </button>
       </div>
       <Card>
-        <Table headers={['เวลา', 'ผู้ใช้', 'Action', 'Module', 'รายละเอียด', 'IP']} rows={
+        <Table headers={['วันที่ / เวลา', 'ผู้ใช้', 'Action', 'Module', 'รายละเอียด', 'IP']} rows={
           filtered.length === 0
             ? <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">ไม่พบข้อมูล</td></tr>
-            : pagedLogs.map(l => (
+            : pagedLogs.map(l => {
+              const { date, time, rel } = fmtTimestamp(l.timestamp)
+              return (
               <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                <td className="px-4 py-3 text-[11px] font-mono text-slate-400 whitespace-nowrap">{l.timestamp}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="text-xs font-medium text-slate-700 dark:text-slate-200">{date}</div>
+                  <div className="text-[11px] font-mono text-slate-400 mt-0.5">{time}</div>
+                  {rel && <div className="text-[10px] text-slate-300 dark:text-slate-600 mt-0.5">{rel}</div>}
+                </td>
                 <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{l.userName}</td>
                 <td className="px-4 py-3"><span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${actionColor[l.action] || 'bg-slate-100 text-slate-600'}`}>{l.action}</span></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{l.module}</td>
                 <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">{l.detail}</td>
                 <td className="px-4 py-3 text-[11px] font-mono text-slate-400">{l.ip}</td>
               </tr>
-            ))
+            )})
         } />
         {filtered.length > 0 && <div className="px-4 pb-3"><Pagination total={filtered.length} page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize} /></div>}
       </Card>
