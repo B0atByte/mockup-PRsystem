@@ -85,6 +85,7 @@ users.put('/:id', async (c) => {
     const user = await prisma.user.update({ where: { id }, data })
     return c.json(safeUser(user))
   } catch (err: any) {
+    if (err.code === 'P2025') return c.json({ error: 'ไม่พบผู้ใช้' }, 404)
     if (err.code === 'P2002') {
       const field = err.meta?.target?.includes('email') ? 'Email' : 'Username'
       return c.json({ error: `${field} นี้ถูกใช้งานแล้ว` }, 400)
