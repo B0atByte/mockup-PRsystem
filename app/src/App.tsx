@@ -2241,12 +2241,12 @@ function TrackingPage({ requests, user, onView }: {
         state: s === 'pending' ? 'current' : s === 'rejected' ? 'rejected' : 'done',
       },
       {
-        label: 'ออก PR',
+        label: 'แนบเอกสาร PR',
         sub: hasPR ? (r.prNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
         state: s === 'rejected' || s === 'pending' ? 'pending' : hasPR ? 'done' : 'current',
       },
       {
-        label: 'ออก PO',
+        label: 'แนบเอกสาร PO',
         sub: hasPO ? (r.poNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
         state: s === 'rejected' || s === 'pending' ? 'pending' : hasPO ? 'done' : hasPR ? 'current' : 'pending',
       },
@@ -2419,12 +2419,12 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
       state: s === 'pending' ? 'current' : s === 'rejected' ? 'rejected' : 'done',
     },
     {
-      label: 'ออก PR',
+      label: 'แนบเอกสาร PR',
       sub: hasPR ? (req.prNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
       state: s === 'rejected' || s === 'pending' ? 'pending' : hasPR ? 'done' : 'current',
     },
     {
-      label: 'ออก PO',
+      label: 'แนบเอกสาร PO',
       sub: hasPO ? (req.poNo || '—') : inPurchasing ? 'รอแนบไฟล์' : '—',
       state: s === 'rejected' || s === 'pending' ? 'pending' : hasPO ? 'done' : hasPR ? 'current' : 'pending',
     },
