@@ -2452,6 +2452,7 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
           {[
             ['ชื่อรายการ', req.title], ['หมวดหมู่', req.category],
             ['ผู้ขอ', req.createdByName], ['วันที่สร้าง', req.createdAt],
+            ...(req.dueDate ? [['วันที่ต้องชำระ', req.dueDate]] : []),
             ...(req.prNo ? [['PR No.', req.prNo]] : []),
             ...(req.poNo ? [['PO No.', req.poNo]] : []),
             ...(req.transferRef ? [['Ref. โอนเงิน', req.transferRef]] : []),
