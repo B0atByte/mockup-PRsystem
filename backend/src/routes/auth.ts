@@ -6,6 +6,7 @@ import { signToken } from '../lib/jwt.js'
 import { authMiddleware, requireRole } from '../middleware/auth.js'
 import { parseBody } from '../lib/validate.js'
 import { getClientIp, isLocked, recordFailure, recordSuccess, unlockIp, getLockedIps } from '../lib/rateLimiter.js'
+import { addToBlacklist } from '../lib/tokenBlacklist.js'
 
 const auth = new Hono()
 
@@ -63,6 +64,15 @@ auth.post('/login', async (c) => {
       active: user.active,
     },
   })
+})
+
+// POST /api/auth/logout — เพิ่ม token เข้า blacklist ทันที
+auth.post('/logout', authMiddleware, (c) => {
+  const token = c.req.header('Authorization')?.slice(7) || ''
+  const payload = c.get('user') as any
+  const exp = payload?.exp || Math.floor(Date.now() / 1000) + 8 * 3600
+  if (token) addToBlacklist(token, exp)
+  return c.json({ ok: true })
 })
 
 // GET /api/auth/locked-ips — itsupport ดู IP ที่ถูกล็อก

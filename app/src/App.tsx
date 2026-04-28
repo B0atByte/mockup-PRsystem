@@ -3447,6 +3447,7 @@ export default function App() {
 
   const handleLogout = () => {
     addAudit('LOGOUT', 'Auth', 'ออกจากระบบ');
+    api.auth.logout().catch(() => {}); // blacklist token บน server
     localStorage.removeItem('token');
     setCurrentUser(null);
     setPage('dashboard');

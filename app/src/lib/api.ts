@@ -25,6 +25,7 @@ export const api = {
     login: (username: string, password: string) =>
       req<{ token: string; user: any }>('POST', '/api/auth/login', { username, password }),
     me: () => req<any>('GET', '/api/auth/me'),
+    logout: () => req<{ ok: boolean }>('POST', '/api/auth/logout', {}),
     getLockedIps: () => req<any[]>('GET', '/api/auth/locked-ips'),
     unlockIp: (ip: string) => req<{ ok: boolean }>('DELETE', `/api/auth/locked-ips/${encodeURIComponent(ip)}`),
   },
