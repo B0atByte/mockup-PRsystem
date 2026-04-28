@@ -1296,6 +1296,7 @@ function RadioGroup({ options, value, onChange }: { options: { val: string; labe
 
 // ── Create Request Page ──────────────────────────────────────────────────────
 function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Omit<PurchaseRequest, 'id' | 'reqNo' | 'createdAt' | 'updatedAt'>) => void; toast: (m: string, t?: Toast['type']) => void }) {
+  const [title, setTitle] = useState('');
   const [subAmount, setSubAmount] = useState('');
   const [vatAmount, setVatAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -1314,6 +1315,7 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
   const totalAmount = sub + vat;
 
   const handleReset = () => {
+    setTitle('');
     setSubAmount(''); setVatAmount('');
     setPaymentMethod(''); setPaymentTiming('');
     setOrderDate(today()); setDeliveryDate(''); setDueDate('');
@@ -1322,12 +1324,13 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
   };
 
   const handleSubmit = () => {
+    if (!title.trim()) return toast('กรุณากรอกชื่อรายการขอซื้อ', 'error');
     if (!reqFileUrl) return toast('กรุณาแนบใบขอสั่งซื้อ', 'error');
     if (!subAmount || sub <= 0) return toast('กรุณากรอกยอดเงินก่อน VAT', 'error');
     if (!paymentMethod) return toast('กรุณาเลือกช่องทางการชำระเงิน', 'error');
     if (!paymentTiming) return toast('กรุณาเลือกกำหนดจ่าย', 'error');
     onSave({
-      title: `ใบขอซื้อสินค้า ${orderDate}`,
+      title: title.trim(),
       category: '', categories: [], supplierName: '', supplierName2: '',
       items: [], totalAmount, vatAmount: vat, reason: notes,
       paymentMethod: paymentMethod as any, paymentTiming: paymentTiming as any,
@@ -1352,6 +1355,9 @@ function CreateRequestPage({ user, onSave, toast }: { user: User; onSave: (r: Om
         </div>
 
         <div className="p-6 flex flex-col gap-5">
+          {/* ชื่อรายการ */}
+          <Input label="ชื่อรายการขอซื้อ *" value={title} onChange={e => setTitle(e.target.value)} placeholder="เช่น ซื้อวัตถุดิบประจำสัปดาห์, ซื้ออุปกรณ์สำนักงาน" />
+
           {/* วันที่แจ้ง + เลขที่ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="วันที่แจ้ง *" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
