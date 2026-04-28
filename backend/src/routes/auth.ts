@@ -17,15 +17,19 @@ const loginSchema = z.object({
 auth.post('/login', async (c) => {
   const ip = getClientIp(c)
 
-  if (isLocked(ip)) {
-    return c.json({ error: 'IP นี้ถูกล็อกชั่วคราว เนื่องจากพยายาม login ผิดเกินกำหนด กรุณาติดต่อ IT Support' }, 429)
-  }
-
   const result = await parseBody(c, loginSchema)
   if (!(result as any).data) return result as unknown as Response
   const { username, password } = (result as any).data
 
   const user = await prisma.user.findUnique({ where: { username } })
+
+  // itsupport ข้าม IP lock ได้ — เพื่อให้ปลดล็อก IP ที่ถูกบล็อกได้เสมอ
+  const isItsupport = user?.role === 'itsupport' && user?.active
+
+  if (!isItsupport && isLocked(ip)) {
+    return c.json({ error: 'IP นี้ถูกล็อกชั่วคราว เนื่องจากพยายาม login ผิดเกินกำหนด กรุณาติดต่อ IT Support' }, 429)
+  }
+
   if (!user || !user.active) {
     const { locked, remaining } = recordFailure(ip)
     const msg = locked
@@ -36,11 +40,14 @@ auth.post('/login', async (c) => {
 
   const valid = await bcrypt.compare(password, user.password)
   if (!valid) {
-    const { locked, remaining } = recordFailure(ip)
-    const msg = locked
-      ? 'IP ถูกล็อกแล้ว เนื่องจากพยายาม login ผิดเกินกำหนด กรุณาติดต่อ IT Support'
-      : `ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง (เหลืออีก ${remaining} ครั้ง)`
-    return c.json({ error: msg }, locked ? 429 : 401)
+    if (!isItsupport) {
+      const { locked, remaining } = recordFailure(ip)
+      const msg = locked
+        ? 'IP ถูกล็อกแล้ว เนื่องจากพยายาม login ผิดเกินกำหนด กรุณาติดต่อ IT Support'
+        : `ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง (เหลืออีก ${remaining} ครั้ง)`
+      return c.json({ error: msg }, locked ? 429 : 401)
+    }
+    return c.json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }, 401)
   }
 
   recordSuccess(ip)
