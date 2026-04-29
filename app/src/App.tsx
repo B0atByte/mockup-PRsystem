@@ -2550,13 +2550,13 @@ function TrackingPage({ requests, user, onView }: {
 
   const circleClass = (state: StepState) =>
     state === 'done' ? 'bg-green-500 border-green-500' :
-      state === 'current' ? 'bg-purple-500 border-purple-500 ring-4 ring-purple-100 dark:ring-purple-900/40' :
+      state === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40 animate-pulse' :
         state === 'rejected' ? 'bg-red-500 border-red-500' :
           'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
 
   const labelClass = (state: StepState) =>
     state === 'done' ? 'text-green-600 dark:text-green-400' :
-      state === 'current' ? 'text-purple-600 dark:text-purple-400 font-semibold' :
+      state === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
         state === 'rejected' ? 'text-red-500 dark:text-red-400' :
           'text-slate-400';
 
@@ -2771,12 +2771,12 @@ function RequestDetailModal({ req, onClose }: { req: PurchaseRequest | null; onC
     st === 'done' ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700';
   const circleClass = (st: StepState) =>
     st === 'done' ? 'bg-green-500 border-green-500' :
-      st === 'current' ? 'bg-purple-500 border-purple-500 ring-4 ring-purple-100 dark:ring-purple-900/40' :
+      st === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40 animate-pulse' :
         st === 'rejected' ? 'bg-red-500 border-red-500' :
           'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
   const labelClass = (st: StepState) =>
     st === 'done' ? 'text-green-600 dark:text-green-400' :
-      st === 'current' ? 'text-purple-600 dark:text-purple-400 font-semibold' :
+      st === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
         st === 'rejected' ? 'text-red-500 dark:text-red-400' : 'text-slate-400';
 
   return (
