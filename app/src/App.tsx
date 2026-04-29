@@ -2550,13 +2550,13 @@ function TrackingPage({ requests, user, onView }: {
 
   const circleClass = (state: StepState) =>
     state === 'done' ? 'bg-green-500 border-green-500' :
-      state === 'current' ? 'bg-blue-500 border-blue-500 ring-4 ring-blue-100 dark:ring-blue-900/40' :
+      state === 'current' ? 'bg-orange-500 border-orange-500 ring-4 ring-orange-100 dark:ring-orange-900/40' :
         state === 'rejected' ? 'bg-red-500 border-red-500' :
           'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600';
 
   const labelClass = (state: StepState) =>
     state === 'done' ? 'text-green-600 dark:text-green-400' :
-      state === 'current' ? 'text-blue-600 dark:text-blue-400 font-semibold' :
+      state === 'current' ? 'text-orange-600 dark:text-orange-400 font-semibold' :
         state === 'rejected' ? 'text-red-500 dark:text-red-400' :
           'text-slate-400';
 
